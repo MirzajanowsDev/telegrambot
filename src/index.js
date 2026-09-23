@@ -34,6 +34,17 @@ if (!CHANNEL_ID) throw new Error('Укажите CHANNEL_ID в .env');
 const bot = new Telegraf(BOT_TOKEN);
 const DB_PATH = path.join(__dirname, '..', 'data.json');
 
+async function safeAnswer(ctx, text) {
+  try {
+    await ctx.answerCbQuery(text);
+  } catch (err) {
+    const code = err && err.response && err.response.error_code;
+    // ignore common harmless callback errors
+    if (code === 400 || code === 403) return;
+    console.error('CB ERROR:', err);
+  }
+}
+
 function loadDb() {
   try { return JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); }
   catch { return { users: {}, payments: {} }; }
@@ -93,12 +104,12 @@ bot.start(async (ctx) => {
 });
 
 bot.action('language', async (ctx) => {
-  await ctx.answerCbQuery();
+  await safeAnswer(ctx);
   await ctx.editMessageText('Выберите язык / Tilni tanlang:', languageKeyboard());
 });
 
 bot.action(/^lang_(ru|uz)$/, async (ctx) => {
-  await ctx.answerCbQuery();
+  await safeAnswer(ctx);
   const lang = ctx.match[1];
   setUser(ctx.from.id, { lang });
   const text = tr(
@@ -110,7 +121,7 @@ bot.action(/^lang_(ru|uz)$/, async (ctx) => {
 });
 
 bot.action('home', async (ctx) => {
-  await ctx.answerCbQuery();
+  await safeAnswer(ctx);
   const lang = getUser(ctx.from.id).lang || 'ru';
   await ctx.editMessageText(
     tr(lang, '🎮 GENERALS ДЛЯ ANDROID', '🎮 GENERALS ANDROID UCHUN'),
@@ -119,7 +130,7 @@ bot.action('home', async (ctx) => {
 });
 
 bot.action('choose_payment', async (ctx) => {
-  await ctx.answerCbQuery();
+  await safeAnswer(ctx);
   const lang = getUser(ctx.from.id).lang || 'ru';
   await ctx.reply(
     tr(
@@ -132,7 +143,7 @@ bot.action('choose_payment', async (ctx) => {
 });
 
 bot.action(/^pay_(ru|uz|kg)$/, async (ctx) => {
-  await ctx.answerCbQuery();
+  await safeAnswer(ctx);
   const methodCode = ctx.match[1];
   const method = methods[methodCode];
   const lang = getUser(ctx.from.id).lang || 'ru';
@@ -153,7 +164,7 @@ bot.action(/^pay_(ru|uz|kg)$/, async (ctx) => {
 });
 
 bot.action('send_receipt', async (ctx) => {
-  await ctx.answerCbQuery();
+  await safeAnswer(ctx);
   const user = getUser(ctx.from.id);
   const lang = user.lang || 'ru';
 
@@ -248,8 +259,8 @@ bot.on('document', async (ctx) => {
 });
 
 bot.action(/^approve:(.+)$/, async (ctx) => {
-  if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery('Нет доступа');
-  await ctx.answerCbQuery('Подтверждаю…');
+  if (ctx.from.id !== ADMIN_ID) return safeAnswer(ctx, 'Нет доступа');
+  await safeAnswer(ctx, 'Подтверждаю…');
 
   const paymentId = ctx.match[1];
   const db = loadDb();
@@ -299,8 +310,8 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
 });
 
 bot.action(/^reject:(.+)$/, async (ctx) => {
-  if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery('Нет доступа');
-  await ctx.answerCbQuery('Отклонено');
+  if (ctx.from.id !== ADMIN_ID) return safeAnswer(ctx, 'Нет доступа');
+  await safeAnswer(ctx, 'Отклонено');
 
   const paymentId = ctx.match[1];
   const db = loadDb();
@@ -329,7 +340,7 @@ bot.action(/^reject:(.+)$/, async (ctx) => {
 });
 
 bot.action('status', async (ctx) => {
-  await ctx.answerCbQuery();
+  await safeAnswer(ctx);
   const user = getUser(ctx.from.id);
   const lang = user.lang || 'ru';
   const db = loadDb();
