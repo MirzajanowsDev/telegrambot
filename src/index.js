@@ -87,8 +87,8 @@ function mainKeyboard(lang) {
 
 function paymentKeyboard(lang) {
   return Markup.inlineKeyboard([
-    [Markup.button.callback('🇷🇺 500 ₽', 'pay_ru')],
-    [Markup.button.callback("🇺🇿 50 000 сум", 'pay_uz')],
+    [Markup.button.callback('🇷🇺 700 ₽', 'pay_ru')],
+    [Markup.button.callback("🇺🇿 60 000 сум", 'pay_uz')],
     [Markup.button.callback('🇰🇬 500 сом', 'pay_kg')],
     [Markup.button.callback(tr(lang, '⬅️ Назад', '⬅️ Orqaga'), 'home')]
   ]);
