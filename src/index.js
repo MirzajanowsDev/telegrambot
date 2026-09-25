@@ -12,12 +12,12 @@ const INVITE_EXPIRE_MINUTES = Number(process.env.INVITE_EXPIRE_MINUTES || 60);
 const methods = {
   ru: {
     country: '🇷🇺 Россия',
-    price: process.env.PRICE_RU || '500 ₽',
+    price: process.env.PRICE_RU || '700 ₽',
     requisites: process.env.PAYMENT_RU || 'Реквизиты не указаны'
   },
   uz: {
     country: "🇺🇿 O'zbekiston",
-    price: process.env.PRICE_UZ || '50 000 сум',
+    price: process.env.PRICE_UZ || '60000 сум',
     requisites: process.env.PAYMENT_UZ || "Rekvizitlar ko'rsatilmagan"
   },
   kg: {

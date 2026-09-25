@@ -8,6 +8,18 @@
       "payment_method": "ru",
       "waiting_receipt": false
     },
+    "86074307": {
+      "username": "",
+      "first_name": "Komilov",
+      "last_seen": "2026-09-23T20:40:04.875Z",
+      "lang": "uz"
+    },
+    "98590146": {
+      "username": "black_princee",
+      "first_name": "☞",
+      "last_seen": "2026-09-23T20:27:31.034Z",
+      "lang": "uz"
+    },
     "147442118": {
       "username": "Teneger_Uz",
       "first_name": "Islomiddin",
@@ -23,6 +35,12 @@
       "username": "AbnRsoli",
       "first_name": "𓆩 𝘈𝘓𝘐 𝘙𝘚𝘖𝘓𝘐 𓆪 ࿈",
       "last_seen": "2026-09-23T20:22:31.678Z"
+    },
+    "215366495": {
+      "username": "Roma02018",
+      "first_name": "Justin",
+      "last_seen": "2026-09-23T20:40:26.153Z",
+      "lang": "uz"
     },
     "226126697": {
       "username": "Zero_0013",
@@ -79,6 +97,12 @@
       "first_name": "Asadbek",
       "last_seen": "2026-09-23T19:39:11.048Z",
       "lang": "uz"
+    },
+    "590856682": {
+      "username": "elias2191",
+      "first_name": "ELIAS",
+      "last_seen": "2026-09-23T20:35:31.686Z",
+      "lang": "ru"
     },
     "594977091": {
       "username": "",
@@ -264,6 +288,12 @@
       "last_seen": "2026-09-23T19:49:03.093Z",
       "lang": "uz"
     },
+    "1093284631": {
+      "username": "",
+      "first_name": "𝑸𝒂𝒚𝒓𝒖𝒍𝒍𝒂",
+      "last_seen": "2026-09-23T20:26:32.523Z",
+      "lang": "uz"
+    },
     "1097119183": {
       "username": "",
       "first_name": "Ali",
@@ -271,6 +301,12 @@
       "lang": "uz",
       "payment_method": "uz",
       "waiting_receipt": false
+    },
+    "1098109158": {
+      "username": "Jony9829",
+      "first_name": "Jony",
+      "last_seen": "2026-09-23T20:30:04.108Z",
+      "lang": "uz"
     },
     "1098797105": {
       "username": "",
@@ -358,6 +394,20 @@
       "first_name": "Omonjon",
       "last_seen": "2026-09-23T19:57:09.726Z",
       "lang": "ru"
+    },
+    "1416982163": {
+      "username": "Alkieng",
+      "first_name": "💲𝔹𝕌𝕊𝕀ℕ𝔼𝕊𝕊 𝕄𝔸ℕ💲",
+      "last_seen": "2026-09-23T20:40:26.147Z",
+      "lang": "ru"
+    },
+    "1423767372": {
+      "username": "",
+      "first_name": "D.jabbarov",
+      "last_seen": "2026-09-23T20:36:36.117Z",
+      "lang": "uz",
+      "payment_method": "uz",
+      "waiting_receipt": false
     },
     "1427521922": {
       "username": "Alea_007",
@@ -470,6 +520,20 @@
       "last_seen": "2026-09-23T19:39:21.639Z",
       "lang": "ru"
     },
+    "1781105447": {
+      "username": "",
+      "first_name": "طاهر مالك",
+      "last_seen": "2026-09-23T20:30:38.668Z",
+      "lang": "uz",
+      "payment_method": "uz",
+      "waiting_receipt": false
+    },
+    "1813579486": {
+      "username": "",
+      "first_name": "A v",
+      "last_seen": "2026-09-23T20:33:53.239Z",
+      "lang": "uz"
+    },
     "1849591012": {
       "username": "",
       "first_name": "Rahmatillo",
@@ -494,6 +558,12 @@
       "last_seen": "2026-09-23T19:18:12.158Z",
       "lang": "ru"
     },
+    "1951919368": {
+      "username": "",
+      "first_name": "Ринат",
+      "last_seen": "2026-09-23T20:32:48.272Z",
+      "lang": "ru"
+    },
     "1962446298": {
       "username": "",
       "first_name": "㋡",
@@ -505,6 +575,20 @@
       "last_seen": "2026-09-23T20:23:52.474Z",
       "lang": "uz",
       "payment_method": "ru",
+      "waiting_receipt": false
+    },
+    "1977842054": {
+      "username": "",
+      "first_name": "Beksultan",
+      "last_seen": "2026-09-23T20:41:26.691Z",
+      "lang": "uz"
+    },
+    "1981835142": {
+      "username": "",
+      "first_name": "Jasur",
+      "last_seen": "2026-09-23T20:28:23.644Z",
+      "lang": "uz",
+      "payment_method": "uz",
       "waiting_receipt": false
     },
     "1999009896": {
@@ -529,6 +613,12 @@
       "username": "",
       "first_name": "@ALIXAN 0508",
       "last_seen": "2026-09-23T18:13:08.580Z"
+    },
+    "2074302791": {
+      "username": "YazeedEdrees",
+      "first_name": "Yazeed",
+      "last_seen": "2026-09-23T20:26:06.369Z",
+      "lang": "uz"
     },
     "8825662141": {
       "username": "mirzajonows",
@@ -1308,7 +1398,9 @@
       "username": "",
       "first_name": "Сухраб",
       "last_seen": "2026-09-23T19:49:23.453Z",
-      "lang": "uz"
+      "lang": "uz",
+      "payment_method": "ru",
+      "waiting_receipt": true
     },
     "8484231129": {
       "username": "",
@@ -1453,7 +1545,7 @@
       "last_seen": "2026-09-23T20:22:31.600Z",
       "lang": "uz",
       "payment_method": "ru",
-      "waiting_receipt": true
+      "waiting_receipt": false
     },
     "6351446388": {
       "username": "",
@@ -1498,7 +1590,8 @@
     "5290329316": {
       "username": "Xalikov_29",
       "first_name": "Xalikov_Muxammadumar",
-      "last_seen": "2026-09-23T20:22:31.627Z"
+      "last_seen": "2026-09-23T20:22:31.627Z",
+      "lang": "uz"
     },
     "5459229159": {
       "username": "",
@@ -1517,7 +1610,8 @@
     "5695334831": {
       "username": "",
       "first_name": "Ерполат",
-      "last_seen": "2026-09-23T20:22:31.642Z"
+      "last_seen": "2026-09-23T20:22:31.642Z",
+      "lang": "uz"
     },
     "5579623964": {
       "username": "sherzod_dilmurodov",
@@ -1570,7 +1664,8 @@
     "8979644477": {
       "username": "Toaek99",
       "first_name": "Moaez99",
-      "last_seen": "2026-09-23T20:22:31.679Z"
+      "last_seen": "2026-09-23T20:22:31.679Z",
+      "lang": "ru"
     },
     "6634464347": {
       "username": "",
@@ -1591,12 +1686,16 @@
     "5655976003": {
       "username": "Jora6oyevs",
       "first_name": "Joraboyev",
-      "last_seen": "2026-09-23T20:22:31.687Z"
+      "last_seen": "2026-09-23T20:22:31.687Z",
+      "lang": "uz"
     },
     "6218829183": {
       "username": "ShaxzodUrinov",
       "first_name": "Shaxa",
-      "last_seen": "2026-09-23T20:22:31.690Z"
+      "last_seen": "2026-09-23T20:22:31.690Z",
+      "lang": "uz",
+      "payment_method": "uz",
+      "waiting_receipt": false
     },
     "5135422870": {
       "username": "",
@@ -1621,6 +1720,121 @@
       "first_name": "Muhammadrasul",
       "last_seen": "2026-09-23T20:24:44.935Z",
       "lang": "uz"
+    },
+    "5080363004": {
+      "username": "",
+      "first_name": "MEBELLALLFA",
+      "last_seen": "2026-09-23T20:26:38.443Z",
+      "lang": "ru"
+    },
+    "5530098926": {
+      "username": "shuhrat9613",
+      "first_name": "Shuhrat",
+      "last_seen": "2026-09-23T20:26:50.316Z",
+      "lang": "uz"
+    },
+    "6178711450": {
+      "username": "",
+      "first_name": "Maher",
+      "last_seen": "2026-09-23T20:28:56.917Z",
+      "lang": "ru"
+    },
+    "7013004066": {
+      "username": "Alpha_Mer",
+      "first_name": "777",
+      "last_seen": "2026-09-23T20:29:05.138Z",
+      "lang": "uz"
+    },
+    "8966497517": {
+      "username": "Yerbolll7",
+      "first_name": "Yerbol",
+      "last_seen": "2026-09-23T20:29:14.860Z",
+      "lang": "uz"
+    },
+    "6262583876": {
+      "username": "Magdabdallh",
+      "first_name": "مجد",
+      "last_seen": "2026-09-23T20:30:41.988Z",
+      "lang": "ru"
+    },
+    "6214640288": {
+      "username": "Uzoqov_444",
+      "first_name": "U.Z.B🇺🇿",
+      "last_seen": "2026-09-23T20:31:22.911Z",
+      "lang": "uz"
+    },
+    "6088934380": {
+      "username": "",
+      "first_name": "عبدالرحمن",
+      "last_seen": "2026-09-23T20:32:43.952Z",
+      "lang": "ru"
+    },
+    "8737976526": {
+      "username": "",
+      "first_name": "591",
+      "last_seen": "2026-09-23T20:33:41.595Z",
+      "lang": "ru"
+    },
+    "7798400321": {
+      "username": "",
+      "first_name": "~",
+      "last_seen": "2026-09-23T20:34:12.781Z",
+      "lang": "ru"
+    },
+    "8742692376": {
+      "username": "Uuuuuvhh",
+      "first_name": ".",
+      "last_seen": "2026-09-23T20:34:26.583Z",
+      "lang": "uz"
+    },
+    "5962975172": {
+      "username": "",
+      "first_name": "Xusniddin",
+      "last_seen": "2026-09-23T20:35:02.024Z",
+      "lang": "uz"
+    },
+    "8244932036": {
+      "username": "",
+      "first_name": "Nazarov",
+      "last_seen": "2026-09-23T20:35:11.185Z",
+      "lang": "uz"
+    },
+    "8722347467": {
+      "username": "",
+      "first_name": "Мохаммед",
+      "last_seen": "2026-09-23T20:37:46.702Z",
+      "lang": "ru"
+    },
+    "6116099300": {
+      "username": "sdlsmwysd",
+      "first_name": "ليث سامي اسد",
+      "last_seen": "2026-09-23T20:37:54.553Z"
+    },
+    "7340815390": {
+      "username": "X_Bape_x",
+      "first_name": "Mind_Rot",
+      "last_seen": "2026-09-23T20:39:14.895Z",
+      "lang": "uz"
+    },
+    "8994943982": {
+      "username": "",
+      "first_name": "Matin",
+      "last_seen": "2026-09-23T20:40:25.451Z",
+      "lang": "ru"
+    },
+    "8727640851": {
+      "username": "",
+      "first_name": "Farxod",
+      "last_seen": "2026-09-23T20:42:04.862Z",
+      "lang": "uz"
+    },
+    "6756223154": {
+      "username": "",
+      "first_name": "Жасур",
+      "last_seen": "2026-09-23T20:42:52.219Z",
+      "lang": "uz",
+      "payment_method": "uz",
+      "waiting_receipt": false
     }
   },
   "payments": {
@@ -1747,6 +1961,22 @@
       "source_message_id": 719,
       "approved_at": "2026-09-23T19:42:01.693Z",
       "invite_link": "https://t.me/+aOyeCwx9ZkdkZmMy"
+    },
+    "1790195405198_1981835142": {
+      "id": "1790195405198_1981835142",
+      "user_id": 1981835142,
+      "username": "",
+      "first_name": "Jasur",
+      "lang": "uz",
+      "payment_method": "uz",
+      "price": "50 000 сум",
+      "country": "🇺🇿 O'zbekiston",
+      "status": "approved",
+      "created_at": "2026-09-23T20:30:05.198Z",
+      "source_chat_id": 1981835142,
+      "source_message_id": 1114,
+      "approved_at": "2026-09-23T20:30:16.719Z",
+      "invite_link": "https://t.me/+qek0FxD9jpo3YmY6"
     }
   }
 }
