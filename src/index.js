@@ -234,6 +234,8 @@ bot.action(/^pay_(ru|uz|kg)$/, async (ctx) => {
 
   const product = products[user.product];
   const price = product.prices[methodCode];
+  const [requisitesNumber, ...requisitesRest] = price.requisites.split(' ');
+  const requisitesLabel = requisitesRest.join(' ');
 
   setUser(ctx.from.id, {
     payment_method: methodCode,
@@ -243,8 +245,8 @@ bot.action(/^pay_(ru|uz|kg)$/, async (ctx) => {
   await ctx.reply(
     tr(
       lang,
-      `💳 *Оплата доступа*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nСумма: *${price.amount}*\n\nРеквизиты (нажмите, чтобы скопировать):\n\`${price.requisites}\`\n\nПосле оплаты нажмите «📸 Отправить чек».`,
-      `💳 *Kirish uchun to'lov*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nSumma: *${price.amount}*\n\nRekvizitlar (nusxalash uchun bosing):\n\`${price.requisites}\`\n\nTo'lovdan so'ng «📸 Chek yuborish» tugmasini bosing.`
+      `💳 *Оплата доступа*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nСумма: *${price.amount}*\n\nРеквизиты (нажмите, чтобы скопировать):\n\`${requisitesNumber}\` ${requisitesLabel}\n\nПосле оплаты нажмите «📸 Отправить чек».`,
+      `💳 *Kirish uchun to'lov*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nSumma: *${price.amount}*\n\nRekvizitlar (nusxalash uchun bosing):\n\`${requisitesNumber}\` ${requisitesLabel}\n\nTo'lovdan so'ng «📸 Chek yuborish» tugmasini bosing.`
     ),
     { parse_mode: 'Markdown', ...mainKeyboard(lang) }
   );
