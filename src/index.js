@@ -107,9 +107,8 @@ function languageKeyboard() {
 
 function productKeyboard() {
   return Markup.inlineKeyboard([
-    [Markup.button.callback(products.android.name, 'product_android')],
-    [Markup.button.callback(products.iphone.name, 'product_iphone')],
-    [Markup.button.callback(products.gemini.name, 'product_gemini')]
+    [Markup.button.callback(products.android.name, 'product_android')]
+    // iPhone and Gemini Pro temporarily hidden — not working yet
   ]);
 }
 
