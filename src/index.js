@@ -115,8 +115,8 @@ function productKeyboard() {
 function productTitle(lang) {
   return tr(
     lang,
-    '🎮 GENERALS ANDROID, iPhone И GEMINI PRO\n\nЧто хотите приобрести?',
-    "🎮 GENERALS ANDROID va iPhone UCHUN, GEMINI PRO\n\nNimani sotib olmoqchisiz?"
+    '🎮 GENERALS ANDROID\n\nЧто хотите приобрести?',
+    "🎮 GENERALS ANDROID\n\nNimani sotib olmoqchisiz?"
   );
 }
 
@@ -157,7 +157,7 @@ bot.start(async (ctx) => {
     first_name: ctx.from.first_name || '',
     last_seen: new Date().toISOString()
   });
-  await ctx.reply('🎮 GENERALS ANDROID, iPhone & GEMINI PRO\n\nВыберите язык / Tilni tanlang:', languageKeyboard());
+  await ctx.reply('🎮 GENERALS ANDROID\n\nВыберите язык / Tilni tanlang:', languageKeyboard());
 });
 
 bot.action('language', async (ctx) => {
