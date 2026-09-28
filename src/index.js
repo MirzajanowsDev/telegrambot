@@ -5,7 +5,9 @@ const path = require('path');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = Number(process.env.ADMIN_ID);
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME || '';
+const ADMIN_USERNAME = normalizeUsername(process.env.ADMIN_USERNAME || '');
+const DEFAULT_SUPPORT_USERNAME = normalizeUsername(process.env.DEFAULT_SUPPORT_USERNAME || ADMIN_USERNAME || 'mirzajonows');
+const GEMINI_SUPPORT_USERNAME = normalizeUsername(process.env.GEMINI_SUPPORT_USERNAME || 'bahriddindev');
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const CHANNEL_CS16_ID = process.env.CHANNEL_CS16_ID || '-1004335642053';
 const INVITE_EXPIRE_MINUTES = Number(process.env.INVITE_EXPIRE_MINUTES || 60);
@@ -58,12 +60,37 @@ const products = {
   }
 };
 
-if (!BOT_TOKEN || BOT_TOKEN.includes('PASTE_')) throw new Error('Укажите BOT_TOKEN в .env');
-if (!ADMIN_ID) throw new Error('Укажите ADMIN_ID в .env');
-if (!CHANNEL_ID) throw new Error('Укажите CHANNEL_ID в .env');
+if (!BOT_TOKEN || BOT_TOKEN.includes('PASTE_') || BOT_TOKEN === 'your_bot_token') {
+  throw new Error('Укажите BOT_TOKEN в .env');
+}
+if (!Number.isSafeInteger(ADMIN_ID) || ADMIN_ID <= 0) throw new Error('Укажите корректный ADMIN_ID в .env');
+for (const [key, channelId] of Object.entries({ CHANNEL_ID, CHANNEL_CS16_ID })) {
+  if (!/^-100\d+$/.test(channelId || '')) throw new Error(`Укажите корректный ${key} в .env`);
+}
+const missingPaymentConfig = [
+  'PAYMENT_RU',
+  'PAYMENT_KG',
+  'PAYMENT_UZ_ANDROID',
+  'PAYMENT_UZ_GEMINI'
+].filter(key => !process.env[key]);
+if (missingPaymentConfig.length) {
+  throw new Error(`Укажите реквизиты в .env: ${missingPaymentConfig.join(', ')}`);
+}
+if (!Number.isInteger(INVITE_EXPIRE_MINUTES) || INVITE_EXPIRE_MINUTES <= 0) {
+  throw new Error('INVITE_EXPIRE_MINUTES должен быть положительным целым числом');
+}
+for (const [key, username] of Object.entries({ DEFAULT_SUPPORT_USERNAME, GEMINI_SUPPORT_USERNAME })) {
+  if (!/^[A-Za-z0-9_]{5,32}$/.test(username)) {
+    throw new Error(`${key} содержит некорректный Telegram username`);
+  }
+}
 
 const bot = new Telegraf(BOT_TOKEN);
-const DB_PATH = path.join(__dirname, '..', 'data.json');
+const DB_PATH = process.env.DATA_PATH || path.join(__dirname, '..', 'data.json');
+
+function normalizeUsername(username) {
+  return username.trim().replace(/^@+/, '');
+}
 
 async function safeAnswer(ctx, text) {
   try {
@@ -76,12 +103,40 @@ async function safeAnswer(ctx, text) {
   }
 }
 
+async function safeDeleteCallbackMessage(ctx) {
+  const messageId = ctx.callbackQuery && ctx.callbackQuery.message && ctx.callbackQuery.message.message_id;
+  if (!messageId || typeof ctx.deleteMessage !== 'function') return;
+  try {
+    await ctx.deleteMessage(messageId);
+  } catch (err) {
+    const code = err && err.response && err.response.error_code;
+    if (code !== 400 && code !== 403) console.error('DELETE MESSAGE ERROR:', err);
+  }
+}
+
+async function replyAndRemovePrevious(ctx, text, extra) {
+  const message = await ctx.reply(text, extra);
+  await safeDeleteCallbackMessage(ctx);
+  return message;
+}
+
 function loadDb() {
-  try { return JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); }
-  catch { return { users: {}, payments: {} }; }
+  try {
+    const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+    return {
+      users: db.users && typeof db.users === 'object' ? db.users : {},
+      payments: db.payments && typeof db.payments === 'object' ? db.payments : {}
+    };
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return { users: {}, payments: {} };
+    throw new Error(`Не удалось прочитать базу ${DB_PATH}: ${err.message}`);
+  }
 }
 function saveDb(db) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf8');
+  const tempPath = `${DB_PATH}.${process.pid || 'bot'}.tmp`;
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+  fs.writeFileSync(tempPath, JSON.stringify(db, null, 2), { encoding: 'utf8', mode: 0o600 });
+  fs.renameSync(tempPath, DB_PATH);
 }
 function getUser(id) {
   const db = loadDb();
@@ -98,6 +153,22 @@ function tr(lang, ru, uz) {
 
 function escapeHtml(str) {
   return (str || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function splitRequisites(requisites) {
+  const value = (requisites || '').trim();
+  if (value.includes('|')) {
+    const [number, ...label] = value.split('|');
+    return { number: number.trim(), label: label.join('|').trim() };
+  }
+
+  const parts = value.split(/\s+/).filter(Boolean);
+  if (!parts.length) return { number: '', label: '' };
+  let count = 1;
+  if (!parts[0].startsWith('+')) {
+    while (count < parts.length && /^\d+$/.test(parts[count])) count += 1;
+  }
+  return { number: parts.slice(0, count).join(' '), label: parts.slice(count).join(' ') };
 }
 
 function profileBlock(record) {
@@ -118,8 +189,9 @@ function languageKeyboard() {
 function productKeyboard() {
   return Markup.inlineKeyboard([
     [Markup.button.callback(products.android.name, 'product_android')],
-    [Markup.button.callback(products.cs16.name, 'product_cs16')]
-    // iPhone and Gemini Pro temporarily hidden — not working yet
+    [Markup.button.callback(products.cs16.name, 'product_cs16')],
+    [Markup.button.callback(products.gemini.name, 'product_gemini')]
+    // iPhone temporarily hidden — not working yet
   ]);
 }
 
@@ -133,21 +205,35 @@ function productTitle(lang) {
 
 function mainTitle(lang, productCode) {
   const product = products[productCode];
+  const deliveryText = productCode === 'gemini'
+    ? tr(
+      lang,
+      '✅ После проверки администратором бот подтвердит оплату. Для получения Gemini Pro обратитесь в поддержку.',
+      "✅ Administrator tekshirganidan so'ng bot to'lovni tasdiqlaydi. Gemini Pro olish uchun yordam xizmatiga murojaat qiling."
+    )
+    : tr(
+      lang,
+      '✅ После проверки администратором бот сам выдаст доступ в закрытый канал.',
+      "✅ Administrator tekshirganidan so'ng bot yopiq kanalga kirish havolasini beradi."
+    );
   return tr(
     lang,
-    `🎮 *${product.name}*\n\nВыберите удобный способ оплаты и после оплаты отправьте чек.\n\n✅ После проверки администратором бот сам выдаст доступ в закрытый канал.`,
-    `🎮 *${product.name}*\n\nQulay to'lov turini tanlang va to'lovdan keyin chekni yuboring.\n\n✅ Administrator tekshirganidan so'ng bot yopiq kanalga kirish havolasini beradi.`
+    `🎮 *${product.name}*\n\nВыберите удобный способ оплаты и после оплаты отправьте чек.\n\n${deliveryText}`,
+    `🎮 *${product.name}*\n\nQulay to'lov turini tanlang va to'lovdan keyin chekni yuboring.\n\n${deliveryText}`
   );
 }
 
-function mainKeyboard(lang) {
-  const supportLink = ADMIN_USERNAME ? `https://t.me/${ADMIN_USERNAME}` : `tg://user?id=${ADMIN_ID}`;
+function mainKeyboard(lang, productCode) {
+  const supportUsername = productCode === 'gemini' ? GEMINI_SUPPORT_USERNAME : DEFAULT_SUPPORT_USERNAME;
+  const supportLink = `https://t.me/${supportUsername}`;
   return Markup.inlineKeyboard([
     [Markup.button.callback(tr(lang, '💳 Оплатить доступ', "💳 To'lov qilish"), 'choose_payment')],
     [Markup.button.callback(tr(lang, '📸 Отправить чек', '📸 Chek yuborish'), 'send_receipt')],
     [Markup.button.callback(tr(lang, '✅ Статус оплаты', "✅ To'lov holati"), 'status')],
-    [Markup.button.callback(tr(lang, '🔁 Сменить товар', "🔁 Mahsulotni almashtirish"), 'choose_product')],
-    [Markup.button.callback(tr(lang, '🌐 Сменить язык', "🌐 Tilni o'zgartirish"), 'language')],
+    [
+      Markup.button.callback('🇷🇺 Русский', 'lang_ru'),
+      Markup.button.callback("🇺🇿 O'zbekcha", 'lang_uz')
+    ],
     [Markup.button.url(tr(lang, '🆘 Поддержка', "🆘 Yordam"), supportLink)]
   ]);
 }
@@ -155,9 +241,9 @@ function mainKeyboard(lang) {
 function paymentKeyboard(lang, productCode) {
   const product = products[productCode];
   return Markup.inlineKeyboard([
-    [Markup.button.callback(`${countryNames.ru} ${product.prices.ru.amount}`, 'pay_ru')],
-    [Markup.button.callback(`${countryNames.uz} ${product.prices.uz.amount}`, 'pay_uz')],
-    [Markup.button.callback(`${countryNames.kg} ${product.prices.kg.amount}`, 'pay_kg')],
+    [Markup.button.callback(`${countryNames.ru} ${product.prices.ru.amount}`, `pay_${productCode}_ru`)],
+    [Markup.button.callback(`${countryNames.uz} ${product.prices.uz.amount}`, `pay_${productCode}_uz`)],
+    [Markup.button.callback(`${countryNames.kg} ${product.prices.kg.amount}`, `pay_${productCode}_kg`)],
     [Markup.button.callback(tr(lang, '⬅️ Назад', '⬅️ Orqaga'), 'home')]
   ]);
 }
@@ -166,7 +252,10 @@ bot.start(async (ctx) => {
   setUser(ctx.from.id, {
     username: ctx.from.username || '',
     first_name: ctx.from.first_name || '',
-    last_seen: new Date().toISOString()
+    last_seen: new Date().toISOString(),
+    product: null,
+    payment_method: null,
+    waiting_receipt: false
   });
   await ctx.reply(`${BOT_HEADING}\n\nВыберите язык / Tilni tanlang:`, languageKeyboard());
 });
@@ -179,7 +268,14 @@ bot.action('language', async (ctx) => {
 bot.action(/^lang_(ru|uz)$/, async (ctx) => {
   await safeAnswer(ctx);
   const lang = ctx.match[1];
+  const user = getUser(ctx.from.id);
   setUser(ctx.from.id, { lang });
+  if (user.product && products[user.product]) {
+    return ctx.editMessageText(
+      mainTitle(lang, user.product),
+      { parse_mode: 'Markdown', ...mainKeyboard(lang, user.product) }
+    );
+  }
   await ctx.editMessageText(productTitle(lang), productKeyboard());
 });
 
@@ -194,7 +290,7 @@ bot.action(/^product_(android|iphone|gemini|cs16)$/, async (ctx) => {
   const productCode = ctx.match[1];
   const lang = getUser(ctx.from.id).lang || 'ru';
   setUser(ctx.from.id, { product: productCode, payment_method: null, waiting_receipt: false });
-  await ctx.editMessageText(mainTitle(lang, productCode), { parse_mode: 'Markdown', ...mainKeyboard(lang) });
+  await ctx.editMessageText(mainTitle(lang, productCode), { parse_mode: 'Markdown', ...mainKeyboard(lang, productCode) });
 });
 
 bot.action('home', async (ctx) => {
@@ -205,7 +301,7 @@ bot.action('home', async (ctx) => {
   if (!user.product || !products[user.product]) {
     return ctx.editMessageText(productTitle(lang), productKeyboard());
   }
-  await ctx.editMessageText(mainTitle(lang, user.product), { parse_mode: 'Markdown', ...mainKeyboard(lang) });
+  await ctx.editMessageText(mainTitle(lang, user.product), { parse_mode: 'Markdown', ...mainKeyboard(lang, user.product) });
 });
 
 bot.action('choose_payment', async (ctx) => {
@@ -214,13 +310,15 @@ bot.action('choose_payment', async (ctx) => {
   const lang = user.lang || 'ru';
 
   if (!user.product || !products[user.product]) {
-    return ctx.reply(
+    return replyAndRemovePrevious(
+      ctx,
       tr(lang, 'Сначала выберите товар.', 'Avval mahsulotni tanlang.'),
       productKeyboard()
     );
   }
 
-  await ctx.reply(
+  await replyAndRemovePrevious(
+    ctx,
     tr(
       lang,
       '💳 Выберите страну / валюту для оплаты:',
@@ -230,37 +328,48 @@ bot.action('choose_payment', async (ctx) => {
   );
 });
 
-bot.action(/^pay_(ru|uz|kg)$/, async (ctx) => {
+async function selectPayment(ctx, productCode, methodCode) {
   await safeAnswer(ctx);
-  const methodCode = ctx.match[1];
   const user = getUser(ctx.from.id);
   const lang = user.lang || 'ru';
 
-  if (!user.product || !products[user.product]) {
-    return ctx.reply(
+  if (!productCode || !products[productCode]) {
+    return replyAndRemovePrevious(
+      ctx,
       tr(lang, 'Сначала выберите товар.', 'Avval mahsulotni tanlang.'),
       productKeyboard()
     );
   }
 
-  const product = products[user.product];
+  const product = products[productCode];
   const price = product.prices[methodCode];
-  const [requisitesNumber, ...requisitesRest] = price.requisites.split(' ');
-  const requisitesLabel = requisitesRest.join(' ');
+  const { number: requisitesNumber, label: requisitesLabel } = splitRequisites(price.requisites);
 
   setUser(ctx.from.id, {
+    product: productCode,
     payment_method: methodCode,
     waiting_receipt: false
   });
 
-  await ctx.reply(
+  await replyAndRemovePrevious(
+    ctx,
     tr(
       lang,
       `💳 *Оплата доступа*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nСумма: *${price.amount}*\n\nРеквизиты (нажмите, чтобы скопировать):\n\`${requisitesNumber}\` ${requisitesLabel}\n\nПосле оплаты нажмите «📸 Отправить чек».`,
       `💳 *Kirish uchun to'lov*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nSumma: *${price.amount}*\n\nRekvizitlar (nusxalash uchun bosing):\n\`${requisitesNumber}\` ${requisitesLabel}\n\nTo'lovdan so'ng «📸 Chek yuborish» tugmasini bosing.`
     ),
-    { parse_mode: 'Markdown', ...mainKeyboard(lang) }
+    { parse_mode: 'Markdown', ...mainKeyboard(lang, productCode) }
   );
+}
+
+bot.action(/^pay_(android|iphone|gemini|cs16)_(ru|uz|kg)$/, async (ctx) => {
+  return selectPayment(ctx, ctx.match[1], ctx.match[2]);
+});
+
+// Keep old messages with pre-product callback data functional.
+bot.action(/^pay_(ru|uz|kg)$/, async (ctx) => {
+  const user = getUser(ctx.from.id);
+  return selectPayment(ctx, user.product, ctx.match[1]);
 });
 
 bot.action('send_receipt', async (ctx) => {
@@ -269,7 +378,8 @@ bot.action('send_receipt', async (ctx) => {
   const lang = user.lang || 'ru';
 
   if (!user.product || !products[user.product] || !user.payment_method) {
-    return ctx.reply(
+    return replyAndRemovePrevious(
+      ctx,
       tr(lang, 'Сначала выберите способ оплаты.', "Avval to'lov usulini tanlang."),
       user.product ? paymentKeyboard(lang, user.product) : productKeyboard()
     );
@@ -280,7 +390,8 @@ bot.action('send_receipt', async (ctx) => {
   const product = products[user.product];
   const price = product.prices[user.payment_method];
 
-  await ctx.reply(
+  await replyAndRemovePrevious(
+    ctx,
     tr(
       lang,
       `📸 Отправьте фото или PDF чека.\n\nТовар: ${product.name}\nОплата: ${countryNames[user.payment_method]} — ${price.amount}`,
@@ -296,7 +407,7 @@ async function acceptReceipt(ctx) {
   if (!user.waiting_receipt || !user.product || !products[user.product] || !user.payment_method) {
     return ctx.reply(
       tr(lang, 'Сначала выберите оплату и нажмите «📸 Отправить чек».', "Avval to'lovni tanlang va «📸 Chek yuborish» tugmasini bosing."),
-      mainKeyboard(lang)
+      mainKeyboard(lang, user.product)
     );
   }
 
@@ -327,27 +438,45 @@ async function acceptReceipt(ctx) {
   };
   saveDb(db);
 
-  await ctx.telegram.forwardMessage(ADMIN_ID, ctx.chat.id, ctx.message.message_id);
+  try {
+    await ctx.telegram.forwardMessage(ADMIN_ID, ctx.chat.id, ctx.message.message_id);
+    await ctx.telegram.sendMessage(
+      ADMIN_ID,
+      `🧾 Новый чек\n\n${profileBlock(db.payments[paymentId])}\n📦 ${product.name}\n🌍 ${countryNames[user.payment_method]}\n💳 ${price.amount}\n\nПодтвердить оплату?`,
+      { parse_mode: 'HTML', ...Markup.inlineKeyboard([
+        [
+          Markup.button.callback('✅ Подтвердить', `approve:${paymentId}`),
+          Markup.button.callback('❌ Отклонить', `reject:${paymentId}`)
+        ]
+      ]) }
+    );
+  } catch (err) {
+    console.error('ADMIN DELIVERY ERROR:', err);
+    delete db.payments[paymentId];
+    db.users[String(ctx.from.id)].waiting_receipt = true;
+    saveDb(db);
+    return ctx.reply(
+      tr(
+        lang,
+        '❗ Не удалось отправить чек администратору. Попробуйте отправить его ещё раз или обратитесь в поддержку.',
+        "❗ Chekni administratorga yuborib bo'lmadi. Uni qayta yuboring yoki yordam xizmatiga murojaat qiling."
+      ),
+      mainKeyboard(lang, user.product)
+    );
+  }
 
-  await ctx.telegram.sendMessage(
-    ADMIN_ID,
-    `🧾 Новый чек\n\n${profileBlock(db.payments[paymentId])}\n📦 ${product.name}\n🌍 ${countryNames[user.payment_method]}\n💳 ${price.amount}\n\nПодтвердить оплату?`,
-    { parse_mode: 'HTML', ...Markup.inlineKeyboard([
-      [
-        Markup.button.callback('✅ Подтвердить', `approve:${paymentId}`),
-        Markup.button.callback('❌ Отклонить', `reject:${paymentId}`)
-      ]
-    ]) }
-  );
-
-  await ctx.reply(
-    tr(
+  const receiptConfirmation = user.product === 'gemini'
+    ? tr(
+      lang,
+      '✅ Чек получен!\n\nОжидайте проверки. После подтверждения обратитесь в поддержку для получения Gemini Pro.',
+      "✅ Chek qabul qilindi!\n\nTekshiruvni kuting. Tasdiqlangach Gemini Pro olish uchun yordam xizmatiga murojaat qiling."
+    )
+    : tr(
       lang,
       '✅ Чек получен!\n\nОжидайте проверки. После подтверждения бот автоматически отправит ссылку в закрытый канал.',
       "✅ Chek qabul qilindi!\n\nTekshiruvni kuting. Tasdiqlangach bot yopiq kanal havolasini avtomatik yuboradi."
-    ),
-    mainKeyboard(lang)
-  );
+    );
+  await ctx.reply(receiptConfirmation, mainKeyboard(lang, user.product));
 }
 
 bot.on('photo', acceptReceipt);
@@ -371,11 +500,44 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
   if (!payment) return ctx.reply('Платёж не найден.');
   if (payment.status === 'approved') return ctx.reply('Уже подтверждено.');
 
+  const lang = payment.lang || 'ru';
+  const productLine = payment.product_name ? `📦 ${payment.product_name}\n` : '';
+
+  if (payment.product === 'gemini') {
+    payment.status = 'approved';
+    payment.approved_at = new Date().toISOString();
+    delete payment.rejected_at;
+    saveDb(db);
+
+    let delivered = true;
+    try {
+      await ctx.telegram.sendMessage(
+        payment.user_id,
+        tr(
+          lang,
+          `✅ *Оплата подтверждена!*\n\n${productLine}${payment.country} — ${payment.price}\n\nДля получения Gemini Pro напишите в поддержку.`,
+          `✅ *To'lov tasdiqlandi!*\n\n${productLine}${payment.country} — ${payment.price}\n\nGemini Pro olish uchun yordam xizmatiga yozing.`
+        ),
+        { parse_mode: 'Markdown', ...mainKeyboard(lang, 'gemini') }
+      );
+    } catch (err) {
+      delivered = false;
+      console.error('DELIVERY ERROR:', err);
+    }
+    const deliveryLine = delivered
+      ? `Пользователю отправлен контакт @${GEMINI_SUPPORT_USERNAME}.`
+      : 'Уведомление не доставлено пользователю. Свяжитесь с ним вручную.';
+    await ctx.editMessageText(
+      `✅ ОПЛАТА GEMINI PRO ПОДТВЕРЖДЕНА\n\n${profileBlock(payment)}\n${productLine}${payment.country} — ${payment.price}\n${deliveryLine}`,
+      { parse_mode: 'HTML' }
+    );
+    return;
+  }
+
   // Resolve from the paid product, never the user's current menu selection.
   const channelId = payment.product === 'cs16' ? CHANNEL_CS16_ID : CHANNEL_ID;
 
   const expireDate = Math.floor(Date.now() / 1000) + INVITE_EXPIRE_MINUTES * 60;
-  const productLine = payment.product_name ? `📦 ${payment.product_name}\n` : '';
 
   let invite;
   try {
@@ -392,10 +554,10 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
   payment.status = 'approved';
   payment.approved_at = new Date().toISOString();
   payment.invite_link = invite.invite_link;
+  delete payment.rejected_at;
   saveDb(db);
 
-  const lang = payment.lang || 'ru';
-
+  let delivered = true;
   try {
     await ctx.telegram.sendMessage(
       payment.user_id,
@@ -412,17 +574,46 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
       }
     );
 
-    await ctx.editMessageText(
-      `✅ ОПЛАТА ПОДТВЕРЖДЕНА\n\n${profileBlock(payment)}\n${productLine}${payment.country} — ${payment.price}\nСсылка отправлена пользователю.`,
-      { parse_mode: 'HTML' }
-    );
   } catch (err) {
+    delivered = false;
     console.error('DELIVERY ERROR:', err);
-    await ctx.editMessageText(
-      `✅ ОПЛАТА ПОДТВЕРЖДЕНА, но не удалось отправить ссылку пользователю (возможно, бот заблокирован).\n\n${profileBlock(payment)}\n${productLine}${payment.country} — ${payment.price}\n\nПерешлите ссылку вручную:\n${invite.invite_link}`,
-      { parse_mode: 'HTML' }
-    );
   }
+  const deliveryLine = delivered
+    ? 'Ссылка отправлена пользователю.'
+    : `Ссылка не доставлена пользователю. Перешлите её вручную:\n${invite.invite_link}`;
+  await ctx.editMessageText(
+    `✅ ОПЛАТА ПОДТВЕРЖДЕНА\n\n${profileBlock(payment)}\n${productLine}${payment.country} — ${payment.price}\n${deliveryLine}`,
+    { parse_mode: 'HTML' }
+  );
+});
+
+bot.action(/^retry:(.+)$/, async (ctx) => {
+  await safeAnswer(ctx);
+  const paymentId = ctx.match[1];
+  const db = loadDb();
+  const payment = db.payments[paymentId];
+  const lang = getUser(ctx.from.id).lang || payment?.lang || 'ru';
+
+  if (!payment || payment.user_id !== ctx.from.id) {
+    return replyAndRemovePrevious(ctx, tr(lang, 'Платёж не найден.', "To'lov topilmadi."));
+  }
+  if (payment.status !== 'rejected' || !products[payment.product] || !countryNames[payment.payment_method]) {
+    return replyAndRemovePrevious(ctx, tr(lang, 'Этот чек нельзя отправить повторно.', "Bu chekni qayta yuborib bo'lmaydi."));
+  }
+
+  setUser(ctx.from.id, {
+    product: payment.product,
+    payment_method: payment.payment_method,
+    waiting_receipt: true
+  });
+  await replyAndRemovePrevious(
+    ctx,
+    tr(
+      lang,
+      `📸 Отправьте новое фото или PDF чека.\n\nТовар: ${payment.product_name}\nОплата: ${payment.country} — ${payment.price}`,
+      `📸 Chekning yangi rasmi yoki PDF faylini yuboring.\n\nMahsulot: ${payment.product_name}\nTo'lov: ${payment.country} — ${payment.price}`
+    )
+  );
 });
 
 bot.action(/^reject:(.+)$/, async (ctx) => {
@@ -434,6 +625,8 @@ bot.action(/^reject:(.+)$/, async (ctx) => {
   const payment = db.payments[paymentId];
 
   if (!payment) return ctx.reply('Платёж не найден.');
+  if (payment.status === 'approved') return ctx.reply('Нельзя отклонить уже подтверждённую оплату.');
+  if (payment.status === 'rejected') return ctx.reply('Уже отклонено.');
 
   payment.status = 'rejected';
   payment.rejected_at = new Date().toISOString();
@@ -441,18 +634,30 @@ bot.action(/^reject:(.+)$/, async (ctx) => {
 
   const lang = payment.lang || 'ru';
   const productLine = payment.product_name ? `📦 ${payment.product_name}\n` : '';
-  await ctx.telegram.sendMessage(
-    payment.user_id,
-    tr(
-      lang,
-      '❌ Оплата не подтверждена.\n\nПроверьте чек и реквизиты. Если была ошибка, отправьте чек повторно.',
-      "❌ To'lov tasdiqlanmadi.\n\nChek va rekvizitlarni tekshiring. Xatolik bo'lsa, chekni qayta yuboring."
-    ),
-    mainKeyboard(lang)
-  );
+  let delivered = true;
+  try {
+    await ctx.telegram.sendMessage(
+      payment.user_id,
+      tr(
+        lang,
+        '❌ Оплата не подтверждена.\n\nПроверьте чек и реквизиты. Если была ошибка, нажмите кнопку ниже и отправьте новый чек.',
+        "❌ To'lov tasdiqlanmadi.\n\nChek va rekvizitlarni tekshiring. Xatolik bo'lsa, quyidagi tugmani bosib yangi chek yuboring."
+      ),
+      Markup.inlineKeyboard([
+        [Markup.button.callback(tr(lang, '📸 Отправить чек повторно', '📸 Chekni qayta yuborish'), `retry:${paymentId}`)],
+        [Markup.button.url(
+          tr(lang, '🆘 Поддержка', '🆘 Yordam'),
+          `https://t.me/${payment.product === 'gemini' ? GEMINI_SUPPORT_USERNAME : DEFAULT_SUPPORT_USERNAME}`
+        )]
+      ])
+    );
+  } catch (err) {
+    delivered = false;
+    console.error('DELIVERY ERROR:', err);
+  }
 
   await ctx.editMessageText(
-    `❌ ОПЛАТА ОТКЛОНЕНА\n\n${profileBlock(payment)}\n${productLine}${payment.country} — ${payment.price}`,
+    `❌ ОПЛАТА ОТКЛОНЕНА\n\n${profileBlock(payment)}\n${productLine}${payment.country} — ${payment.price}${delivered ? '' : '\nУведомление не доставлено пользователю.'}`,
     { parse_mode: 'HTML' }
   );
 });
@@ -464,13 +669,19 @@ bot.action('status', async (ctx) => {
   const db = loadDb();
 
   const payments = Object.values(db.payments)
-    .filter(p => p.user_id === ctx.from.id)
+    .filter(p => p.user_id === ctx.from.id && (!user.product || p.product === user.product))
     .sort((a,b) => b.created_at.localeCompare(a.created_at));
 
   if (!payments.length) {
-    return ctx.reply(
-      tr(lang, 'У вас пока нет отправленных чеков.', 'Siz hali chek yubormagansiz.'),
-      mainKeyboard(lang)
+    const productName = user.product && products[user.product] ? products[user.product].name : '';
+    return replyAndRemovePrevious(
+      ctx,
+      tr(
+        lang,
+        productName ? `У вас пока нет отправленных чеков для ${productName}.` : 'У вас пока нет отправленных чеков.',
+        `${productName || 'Bu mahsulot'} uchun hali chek yubormagansiz.`
+      ),
+      mainKeyboard(lang, user.product)
     );
   }
 
@@ -482,9 +693,10 @@ bot.action('status', async (ctx) => {
   };
   const productLine = p.product_name ? `${p.product_name}\n` : '';
 
-  await ctx.reply(
+  await replyAndRemovePrevious(
+    ctx,
     `${statusMap[p.status] || p.status}\n${productLine}${p.country} — ${p.price}`,
-    mainKeyboard(lang)
+    mainKeyboard(lang, p.product)
   );
 });
 
