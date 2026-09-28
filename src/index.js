@@ -214,13 +214,21 @@ function productTitle(lang) {
   );
 }
 
+function geminiActivationInstructions(lang) {
+  return tr(
+    lang,
+    '🔗 Мы отправим вам ссылку для активации Gemini Pro в течение 30 минут. Пожалуйста, будьте онлайн в это время.\n\n🎥 Когда получите ссылку, сначала включите запись экрана, затем откройте ссылку и активируйте Gemini Pro.\n\n⚠️ Обязательно запишите весь процесс. Если записи экрана не будет и при активации возникнет проблема, мы не сможем помочь.',
+    "🔗 Gemini Pro faollashtirish havolasini 30 daqiqa ichida yuboramiz. Iltimos, shu vaqt davomida onlayn bo'ling.\n\n🎥 Havolani olganingizda, avval ekran yozuvini yoqing, so'ng havolani ochib Gemini Pro'ni faollashtiring.\n\n⚠️ Jarayonni to'liq yozib oling. Ekran yozuvi bo'lmasa va faollashtirishda muammo yuz bersa, yordam bera olmaymiz."
+  );
+}
+
 function mainTitle(lang, productCode) {
   const product = products[productCode];
   const deliveryText = productCode === 'gemini'
     ? tr(
       lang,
-      '✅ После проверки администратором бот подтвердит оплату. Для получения Gemini Pro обратитесь в поддержку.',
-      "✅ Administrator tekshirganidan so'ng bot to'lovni tasdiqlaydi. Gemini Pro olish uchun yordam xizmatiga murojaat qiling."
+      '✅ После проверки оплаты мы отправим ссылку для активации Gemini Pro в течение 30 минут.',
+      "✅ To'lov tekshirilgandan so'ng Gemini Pro faollashtirish havolasini 30 daqiqa ichida yuboramiz."
     )
     : tr(
       lang,
@@ -502,8 +510,8 @@ async function acceptReceipt(ctx) {
   const receiptConfirmation = user.product === 'gemini'
     ? tr(
       lang,
-      '✅ Чек получен!\n\nОжидайте проверки. После подтверждения обратитесь в поддержку для получения Gemini Pro.',
-      "✅ Chek qabul qilindi!\n\nTekshiruvni kuting. Tasdiqlangach Gemini Pro olish uchun yordam xizmatiga murojaat qiling."
+      '✅ Чек получен!\n\nОжидайте проверки. После подтверждения мы отправим ссылку для активации Gemini Pro в течение 30 минут. Пожалуйста, будьте онлайн.',
+      "✅ Chek qabul qilindi!\n\nTekshiruvni kuting. Tasdiqlangach Gemini Pro faollashtirish havolasini 30 daqiqa ichida yuboramiz. Iltimos, onlayn bo'ling."
     )
     : tr(
       lang,
@@ -549,8 +557,8 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
         payment.user_id,
         tr(
           lang,
-          `✅ *Оплата подтверждена!*\n\n${productLine}${payment.country} — ${payment.price}\n\nДля получения Gemini Pro напишите в поддержку.`,
-          `✅ *To'lov tasdiqlandi!*\n\n${productLine}${payment.country} — ${payment.price}\n\nGemini Pro olish uchun yordam xizmatiga yozing.`
+          `✅ *Оплата подтверждена!*\n\n${productLine}${payment.country} — ${payment.price}\n\n${geminiActivationInstructions(lang)}`,
+          `✅ *To'lov tasdiqlandi!*\n\n${productLine}${payment.country} — ${payment.price}\n\n${geminiActivationInstructions(lang)}`
         ),
         { parse_mode: 'Markdown', ...mainKeyboard(lang, 'gemini') }
       );
@@ -559,7 +567,7 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
       console.error('DELIVERY ERROR:', err);
     }
     const deliveryLine = delivered
-      ? `Пользователю отправлен контакт @${GEMINI_SUPPORT_USERNAME}.`
+      ? `Пользователю отправлены инструкции. @${GEMINI_SUPPORT_USERNAME} должен отправить ссылку активации в течение 30 минут.`
       : 'Уведомление не доставлено пользователю. Свяжитесь с ним вручную.';
     await ctx.editMessageText(
       `✅ ОПЛАТА GEMINI PRO ПОДТВЕРЖДЕНА\n\n${profileBlock(payment)}\n${productLine}${payment.country} — ${payment.price}\n${deliveryLine}`,

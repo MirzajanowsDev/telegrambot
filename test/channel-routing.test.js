@@ -98,7 +98,18 @@ test('Gemini approval sends support contact without creating a channel invite', 
   assert.deepEqual(app.channels, []);
   assert.equal(app.db().payments.receipt.status, 'approved');
   assert.match(JSON.stringify(app.sentMessages), /https:\/\/t\.me\/bahriddindev/);
+  assert.match(app.sentMessages[0].text, /30 минут/);
+  assert.match(app.sentMessages[0].text, /запись экрана/);
   assert.match(app.editedMessages[0].text, /@bahriddindev/);
+});
+
+test('Gemini activation instructions follow the chosen Uzbek language', async () => {
+  const app = setup('gemini');
+  app.db().payments.receipt.lang = 'uz';
+  await app.approve();
+  assert.match(app.sentMessages[0].text, /30 daqiqa/);
+  assert.match(app.sentMessages[0].text, /ekran yozuvini/);
+  assert.doesNotMatch(app.sentMessages[0].text, /30 минут/);
 });
 
 test('CS uses built-in channel and prices when optional env overrides are absent', async () => {
