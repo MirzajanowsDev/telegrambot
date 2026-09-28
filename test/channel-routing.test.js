@@ -43,9 +43,12 @@ function setup(product, configured = true) {
   const replies = [];
   const sentMessages = [];
   const editedMessages = [];
+  const deletedMessages = [];
   const ctx = {
     from: { id: 1 }, match: ['', 'receipt'],
+    callbackQuery: { message: { message_id: 99 } },
     answerCbQuery: async () => {}, reply: async text => replies.push(text),
+    deleteMessage: async messageId => deletedMessages.push(messageId),
     editMessageText: async (text, extra) => editedMessages.push({ text, extra }),
     telegram: {
       createChatInviteLink: async (channel, options) => {
@@ -56,7 +59,7 @@ function setup(product, configured = true) {
       sendMessage: async (chatId, text, extra) => sentMessages.push({ chatId, text, extra })
     }
   };
-  return { context, channels, replies, sentMessages, editedMessages, db: () => db,
+  return { context, channels, replies, sentMessages, editedMessages, deletedMessages, db: () => db,
     ctx,
     start: () => startHandler(ctx),
     approve: () => actions.find(a => String(a.pattern).includes('approve:')).handler(ctx),
@@ -138,7 +141,16 @@ test('payment buttons retain the product shown on the original message', async (
   await app.selectScopedPayment('gemini', 'uz');
   assert.equal(app.db().users['1'].product, 'gemini');
   assert.equal(app.db().users['1'].payment_method, 'uz');
+  assert.deepEqual(app.deletedMessages, [99]);
   assert.match(JSON.stringify(vm.runInContext("paymentKeyboard('ru', 'gemini')", app.context)), /pay_gemini_uz/);
+});
+
+test('old navigation message is kept if the next reply fails', async () => {
+  const app = setup('android');
+  app.db().users['1'] = { lang: 'ru', product: 'android' };
+  app.ctx.reply = async () => { throw new Error('send failed'); };
+  await assert.rejects(app.selectScopedPayment('android', 'ru'), /send failed/);
+  assert.deepEqual(app.deletedMessages, []);
 });
 
 test('spaced card numbers remain fully copyable', () => {

@@ -103,6 +103,23 @@ async function safeAnswer(ctx, text) {
   }
 }
 
+async function safeDeleteCallbackMessage(ctx) {
+  const messageId = ctx.callbackQuery && ctx.callbackQuery.message && ctx.callbackQuery.message.message_id;
+  if (!messageId || typeof ctx.deleteMessage !== 'function') return;
+  try {
+    await ctx.deleteMessage(messageId);
+  } catch (err) {
+    const code = err && err.response && err.response.error_code;
+    if (code !== 400 && code !== 403) console.error('DELETE MESSAGE ERROR:', err);
+  }
+}
+
+async function replyAndRemovePrevious(ctx, text, extra) {
+  const message = await ctx.reply(text, extra);
+  await safeDeleteCallbackMessage(ctx);
+  return message;
+}
+
 function loadDb() {
   try {
     const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
@@ -293,13 +310,15 @@ bot.action('choose_payment', async (ctx) => {
   const lang = user.lang || 'ru';
 
   if (!user.product || !products[user.product]) {
-    return ctx.reply(
+    return replyAndRemovePrevious(
+      ctx,
       tr(lang, 'Сначала выберите товар.', 'Avval mahsulotni tanlang.'),
       productKeyboard()
     );
   }
 
-  await ctx.reply(
+  await replyAndRemovePrevious(
+    ctx,
     tr(
       lang,
       '💳 Выберите страну / валюту для оплаты:',
@@ -315,7 +334,8 @@ async function selectPayment(ctx, productCode, methodCode) {
   const lang = user.lang || 'ru';
 
   if (!productCode || !products[productCode]) {
-    return ctx.reply(
+    return replyAndRemovePrevious(
+      ctx,
       tr(lang, 'Сначала выберите товар.', 'Avval mahsulotni tanlang.'),
       productKeyboard()
     );
@@ -331,7 +351,8 @@ async function selectPayment(ctx, productCode, methodCode) {
     waiting_receipt: false
   });
 
-  await ctx.reply(
+  await replyAndRemovePrevious(
+    ctx,
     tr(
       lang,
       `💳 *Оплата доступа*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nСумма: *${price.amount}*\n\nРеквизиты (нажмите, чтобы скопировать):\n\`${requisitesNumber}\` ${requisitesLabel}\n\nПосле оплаты нажмите «📸 Отправить чек».`,
@@ -357,7 +378,8 @@ bot.action('send_receipt', async (ctx) => {
   const lang = user.lang || 'ru';
 
   if (!user.product || !products[user.product] || !user.payment_method) {
-    return ctx.reply(
+    return replyAndRemovePrevious(
+      ctx,
       tr(lang, 'Сначала выберите способ оплаты.', "Avval to'lov usulini tanlang."),
       user.product ? paymentKeyboard(lang, user.product) : productKeyboard()
     );
@@ -368,7 +390,8 @@ bot.action('send_receipt', async (ctx) => {
   const product = products[user.product];
   const price = product.prices[user.payment_method];
 
-  await ctx.reply(
+  await replyAndRemovePrevious(
+    ctx,
     tr(
       lang,
       `📸 Отправьте фото или PDF чека.\n\nТовар: ${product.name}\nОплата: ${countryNames[user.payment_method]} — ${price.amount}`,
@@ -572,10 +595,10 @@ bot.action(/^retry:(.+)$/, async (ctx) => {
   const lang = getUser(ctx.from.id).lang || payment?.lang || 'ru';
 
   if (!payment || payment.user_id !== ctx.from.id) {
-    return ctx.reply(tr(lang, 'Платёж не найден.', "To'lov topilmadi."));
+    return replyAndRemovePrevious(ctx, tr(lang, 'Платёж не найден.', "To'lov topilmadi."));
   }
   if (payment.status !== 'rejected' || !products[payment.product] || !countryNames[payment.payment_method]) {
-    return ctx.reply(tr(lang, 'Этот чек нельзя отправить повторно.', "Bu chekni qayta yuborib bo'lmaydi."));
+    return replyAndRemovePrevious(ctx, tr(lang, 'Этот чек нельзя отправить повторно.', "Bu chekni qayta yuborib bo'lmaydi."));
   }
 
   setUser(ctx.from.id, {
@@ -583,7 +606,8 @@ bot.action(/^retry:(.+)$/, async (ctx) => {
     payment_method: payment.payment_method,
     waiting_receipt: true
   });
-  await ctx.reply(
+  await replyAndRemovePrevious(
+    ctx,
     tr(
       lang,
       `📸 Отправьте новое фото или PDF чека.\n\nТовар: ${payment.product_name}\nОплата: ${payment.country} — ${payment.price}`,
@@ -650,7 +674,8 @@ bot.action('status', async (ctx) => {
 
   if (!payments.length) {
     const productName = user.product && products[user.product] ? products[user.product].name : '';
-    return ctx.reply(
+    return replyAndRemovePrevious(
+      ctx,
       tr(
         lang,
         productName ? `У вас пока нет отправленных чеков для ${productName}.` : 'У вас пока нет отправленных чеков.',
@@ -668,7 +693,8 @@ bot.action('status', async (ctx) => {
   };
   const productLine = p.product_name ? `${p.product_name}\n` : '';
 
-  await ctx.reply(
+  await replyAndRemovePrevious(
+    ctx,
     `${statusMap[p.status] || p.status}\n${productLine}${p.country} — ${p.price}`,
     mainKeyboard(lang, p.product)
   );
