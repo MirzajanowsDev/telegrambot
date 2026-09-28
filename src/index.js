@@ -7,7 +7,7 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = Number(process.env.ADMIN_ID);
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || '';
 const CHANNEL_ID = process.env.CHANNEL_ID;
-const CHANNEL_CS16_ID = process.env.CHANNEL_CS16_ID;
+const CHANNEL_CS16_ID = process.env.CHANNEL_CS16_ID || '-1004335642053';
 const INVITE_EXPIRE_MINUTES = Number(process.env.INVITE_EXPIRE_MINUTES || 60);
 const BOT_HEADING = '🎮 GENERALS & CS 1.6 ANDROID & Gemini Pro';
 
@@ -27,9 +27,9 @@ const products = {
   cs16: {
     name: '🎯 Counter-Strike 1.6',
     prices: {
-      ru: { amount: process.env.PRICE_CS16_RU || '', requisites: PAYMENT_RU },
-      uz: { amount: process.env.PRICE_CS16_UZ || '', requisites: process.env.PAYMENT_UZ_CS16 || PAYMENT_UZ_ANDROID },
-      kg: { amount: process.env.PRICE_CS16_KG || '', requisites: PAYMENT_KG }
+      ru: { amount: process.env.PRICE_CS16_RU || '700 ₽', requisites: PAYMENT_RU },
+      uz: { amount: process.env.PRICE_CS16_UZ || '50 000 сум', requisites: process.env.PAYMENT_UZ_CS16 || PAYMENT_UZ_ANDROID },
+      kg: { amount: process.env.PRICE_CS16_KG || '500 сом', requisites: PAYMENT_KG }
     }
   },
   android: {
@@ -131,18 +131,6 @@ function productTitle(lang) {
   );
 }
 
-function isProductReady(productCode) {
-  return productCode !== 'cs16' || Boolean(
-    CHANNEL_CS16_ID && Object.values(products.cs16.prices).every(price => price.amount.trim())
-  );
-}
-
-function unavailableMessage(lang) {
-  return tr(lang,
-    '⏳ Оплата Counter-Strike 1.6 пока не настроена. Обратитесь в поддержку.',
-    "⏳ Counter-Strike 1.6 uchun to'lov hali sozlanmagan. Yordam xizmatiga murojaat qiling.");
-}
-
 function mainTitle(lang, productCode) {
   const product = products[productCode];
   return tr(
@@ -232,8 +220,6 @@ bot.action('choose_payment', async (ctx) => {
     );
   }
 
-  if (!isProductReady(user.product)) return ctx.reply(unavailableMessage(lang), mainKeyboard(lang));
-
   await ctx.reply(
     tr(
       lang,
@@ -256,8 +242,6 @@ bot.action(/^pay_(ru|uz|kg)$/, async (ctx) => {
       productKeyboard()
     );
   }
-
-  if (!isProductReady(user.product)) return ctx.reply(unavailableMessage(lang), mainKeyboard(lang));
 
   const product = products[user.product];
   const price = product.prices[methodCode];
@@ -291,7 +275,6 @@ bot.action('send_receipt', async (ctx) => {
     );
   }
 
-  if (!isProductReady(user.product)) return ctx.reply(unavailableMessage(lang), mainKeyboard(lang));
   setUser(ctx.from.id, { waiting_receipt: true });
 
   const product = products[user.product];
@@ -316,8 +299,6 @@ async function acceptReceipt(ctx) {
       mainKeyboard(lang)
     );
   }
-
-  if (!isProductReady(user.product)) return ctx.reply(unavailableMessage(lang), mainKeyboard(lang));
 
   const product = products[user.product];
   const price = product.prices[user.payment_method];
@@ -392,7 +373,6 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
 
   // Resolve from the paid product, never the user's current menu selection.
   const channelId = payment.product === 'cs16' ? CHANNEL_CS16_ID : CHANNEL_ID;
-  if (!channelId) return ctx.reply('❗ Укажите CHANNEL_CS16_ID в .env и перезапустите бота. Платёж пока не подтверждён.');
 
   const expireDate = Math.floor(Date.now() / 1000) + INVITE_EXPIRE_MINUTES * 60;
   const productLine = payment.product_name ? `📦 ${payment.product_name}\n` : '';
