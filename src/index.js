@@ -161,8 +161,10 @@ function mainKeyboard(lang, productCode) {
     [Markup.button.callback(tr(lang, '💳 Оплатить доступ', "💳 To'lov qilish"), 'choose_payment')],
     [Markup.button.callback(tr(lang, '📸 Отправить чек', '📸 Chek yuborish'), 'send_receipt')],
     [Markup.button.callback(tr(lang, '✅ Статус оплаты', "✅ To'lov holati"), 'status')],
-    [Markup.button.callback(tr(lang, '🔁 Сменить товар', "🔁 Mahsulotni almashtirish"), 'choose_product')],
-    [Markup.button.callback(tr(lang, '🌐 Сменить язык', "🌐 Tilni o'zgartirish"), 'language')],
+    [
+      Markup.button.callback('🇷🇺 Русский', 'lang_ru'),
+      Markup.button.callback("🇺🇿 O'zbekcha", 'lang_uz')
+    ],
     [Markup.button.url(tr(lang, '🆘 Поддержка', "🆘 Yordam"), supportLink)]
   ]);
 }
@@ -194,7 +196,14 @@ bot.action('language', async (ctx) => {
 bot.action(/^lang_(ru|uz)$/, async (ctx) => {
   await safeAnswer(ctx);
   const lang = ctx.match[1];
+  const user = getUser(ctx.from.id);
   setUser(ctx.from.id, { lang });
+  if (user.product && products[user.product]) {
+    return ctx.editMessageText(
+      mainTitle(lang, user.product),
+      { parse_mode: 'Markdown', ...mainKeyboard(lang, user.product) }
+    );
+  }
   await ctx.editMessageText(productTitle(lang), productKeyboard());
 });
 

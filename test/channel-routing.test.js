@@ -97,3 +97,12 @@ test('menu includes Gemini and support is product-specific', () => {
   assert.match(JSON.stringify(vm.runInContext("mainKeyboard('ru', 'gemini')", app.context)), /https:\/\/t\.me\/bahriddindev/);
   assert.match(JSON.stringify(vm.runInContext("mainKeyboard('ru', 'android')", app.context)), /https:\/\/t\.me\/mirzajonows/);
 });
+
+test('main menu has inline language buttons and no switch-product button', () => {
+  const app = setup('android');
+  const keyboard = vm.runInContext("mainKeyboard('ru', 'android').reply_markup.inline_keyboard", app.context);
+  assert.ok(keyboard.some(row => row.length === 2 &&
+    row[0].callback_data === 'lang_ru' && row[1].callback_data === 'lang_uz'));
+  assert.equal(keyboard.flat().some(button => button.callback_data === 'choose_product'), false);
+  assert.equal(keyboard.flat().some(button => button.callback_data === 'language'), false);
+});
