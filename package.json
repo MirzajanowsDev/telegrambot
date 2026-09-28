@@ -2,11 +2,12 @@
   "name": "generals-access-bot",
   "version": "2.0.0",
   "private": true,
-  "description": "Telegram bot for manual receipt approval and private channel access",
+  "description": "Telegram bot for product payments, manual receipt approval, and access delivery",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

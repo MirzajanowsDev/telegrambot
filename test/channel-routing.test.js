@@ -10,9 +10,10 @@ function setup(product, configured = true) {
     receipt: { product, user_id: 2, status: 'pending' }
   } };
   const actions = [];
+  let startHandler;
   class FakeBot {
     action(pattern, handler) { actions.push({ pattern, handler }); }
-    start() {} on() {} catch() {}
+    start(handler) { startHandler = handler; } on() {} catch() {}
     launch() { return Promise.resolve(); }
   }
   const context = vm.createContext({
@@ -21,13 +22,18 @@ function setup(product, configured = true) {
       if (name === 'telegraf') return { Telegraf: FakeBot, Markup };
       if (name === 'fs') return {
         readFileSync: () => JSON.stringify(db),
-        writeFileSync: (_, value) => { db = JSON.parse(value); }
+        mkdirSync: () => {},
+        writeFileSync: (_, value) => { db = JSON.parse(value); },
+        renameSync: () => {}
       };
       return require(name);
     },
     __dirname: path.resolve('src'), console,
-    process: { env: {
+    process: { pid: 123, env: {
       BOT_TOKEN: 'test', ADMIN_ID: '1', CHANNEL_ID: '-100111',
+      PAYMENT_RU: '+70000000000 Bank', PAYMENT_KG: '+996000000000 Bank',
+      PAYMENT_UZ_ANDROID: '1111 2222 3333 4444 Owner',
+      PAYMENT_UZ_GEMINI: '5555 6666 7777 8888 Owner',
       ...(configured ? { CHANNEL_CS16_ID: '-100222', PRICE_CS16_RU: '100 ₽',
         PRICE_CS16_UZ: '10000 сум', PRICE_CS16_KG: '100 сом' } : {})
     }, once() {} }
@@ -51,7 +57,17 @@ function setup(product, configured = true) {
     }
   };
   return { context, channels, replies, sentMessages, editedMessages, db: () => db,
-    approve: () => actions.find(a => String(a.pattern).includes('approve:')).handler(ctx) };
+    ctx,
+    start: () => startHandler(ctx),
+    approve: () => actions.find(a => String(a.pattern).includes('approve:')).handler(ctx),
+    reject: () => actions.find(a => String(a.pattern).includes('reject:')).handler(ctx),
+    retry: () => actions.find(a => String(a.pattern).includes('retry:')).handler(ctx),
+    status: () => actions.find(a => a.pattern === 'status').handler(ctx),
+    selectScopedPayment: (productCode, methodCode) => {
+      ctx.match = ['', productCode, methodCode];
+      return actions.find(a => String(a.pattern).startsWith('/^pay_(android')).handler(ctx);
+    }
+  };
 }
 
 for (const product of ['cs16', 'android', 'iphone', undefined]) {
@@ -105,4 +121,72 @@ test('main menu has inline language buttons and no switch-product button', () =>
     row[0].callback_data === 'lang_ru' && row[1].callback_data === 'lang_uz'));
   assert.equal(keyboard.flat().some(button => button.callback_data === 'choose_product'), false);
   assert.equal(keyboard.flat().some(button => button.callback_data === 'language'), false);
+});
+
+test('/start clears the previous purchase selection', async () => {
+  const app = setup('android');
+  app.db().users['1'] = { product: 'gemini', payment_method: 'uz', waiting_receipt: true };
+  await app.start();
+  assert.equal(app.db().users['1'].product, null);
+  assert.equal(app.db().users['1'].payment_method, null);
+  assert.equal(app.db().users['1'].waiting_receipt, false);
+});
+
+test('payment buttons retain the product shown on the original message', async () => {
+  const app = setup('android');
+  app.db().users['1'] = { lang: 'ru', product: 'android' };
+  await app.selectScopedPayment('gemini', 'uz');
+  assert.equal(app.db().users['1'].product, 'gemini');
+  assert.equal(app.db().users['1'].payment_method, 'uz');
+  assert.match(JSON.stringify(vm.runInContext("paymentKeyboard('ru', 'gemini')", app.context)), /pay_gemini_uz/);
+});
+
+test('spaced card numbers remain fully copyable', () => {
+  const app = setup('android');
+  const result = vm.runInContext("splitRequisites('1234 5678 9012 3456 Card Owner')", app.context);
+  assert.deepEqual({ number: result.number, label: result.label }, {
+    number: '1234 5678 9012 3456',
+    label: 'Card Owner'
+  });
+});
+
+test('an approved payment cannot be overwritten as rejected', async () => {
+  const app = setup('android');
+  app.db().payments.receipt.status = 'approved';
+  await app.reject();
+  assert.equal(app.db().payments.receipt.status, 'approved');
+  assert.match(app.replies[0], /Нельзя отклонить/);
+});
+
+test('payment status follows the currently selected product', async () => {
+  const app = setup('android');
+  app.db().users['1'] = { lang: 'ru', product: 'gemini' };
+  app.db().payments = {
+    android: { user_id: 1, product: 'android', product_name: '🎮 Generals Android', status: 'approved', country: 'RU', price: '500 ₽', created_at: '2026-01-02' },
+    gemini: { user_id: 1, product: 'gemini', product_name: '🤖 Gemini Pro', status: 'pending', country: 'UZ', price: '50 000 сум', created_at: '2026-01-01' }
+  };
+  await app.status();
+  assert.match(app.replies[0], /Gemini Pro/);
+  assert.doesNotMatch(app.replies[0], /Generals Android/);
+});
+
+test('a rejected payment can restore the exact receipt flow', async () => {
+  const app = setup('gemini');
+  app.ctx.from.id = 2;
+  app.db().users['2'] = { lang: 'uz', product: 'android', payment_method: 'ru', waiting_receipt: false };
+  app.db().payments.receipt = {
+    ...app.db().payments.receipt,
+    product: 'gemini',
+    product_name: '🤖 Gemini Pro',
+    payment_method: 'uz',
+    country: "🇺🇿 O'zbekiston",
+    price: '50 000 сум',
+    status: 'rejected',
+    lang: 'uz'
+  };
+  await app.retry();
+  assert.equal(app.db().users['2'].product, 'gemini');
+  assert.equal(app.db().users['2'].payment_method, 'uz');
+  assert.equal(app.db().users['2'].waiting_receipt, true);
+  assert.match(app.replies[0], /Gemini Pro/);
 });
