@@ -35,24 +35,26 @@ function setup(product, configured = true) {
   vm.runInContext(fs.readFileSync(path.resolve('src/index.js'), 'utf8'), context);
   const channels = [];
   const replies = [];
+  const sentMessages = [];
+  const editedMessages = [];
   const ctx = {
     from: { id: 1 }, match: ['', 'receipt'],
     answerCbQuery: async () => {}, reply: async text => replies.push(text),
-    editMessageText: async () => {},
+    editMessageText: async (text, extra) => editedMessages.push({ text, extra }),
     telegram: {
       createChatInviteLink: async (channel, options) => {
         channels.push(channel);
         assert.equal(options.member_limit, 1);
         return { invite_link: 'https://t.me/+test' };
       },
-      sendMessage: async () => {}
+      sendMessage: async (chatId, text, extra) => sentMessages.push({ chatId, text, extra })
     }
   };
-  return { context, channels, replies, db: () => db,
+  return { context, channels, replies, sentMessages, editedMessages, db: () => db,
     approve: () => actions.find(a => String(a.pattern).includes('approve:')).handler(ctx) };
 }
 
-for (const product of ['cs16', 'android', 'iphone', 'gemini', undefined]) {
+for (const product of ['cs16', 'android', 'iphone', undefined]) {
   test(`approval routes ${product || 'legacy payment'} to its channel`, async () => {
     const app = setup(product);
     await app.approve();
@@ -60,6 +62,15 @@ for (const product of ['cs16', 'android', 'iphone', 'gemini', undefined]) {
     assert.equal(app.db().payments.receipt.status, 'approved');
   });
 }
+
+test('Gemini approval sends support contact without creating a channel invite', async () => {
+  const app = setup('gemini');
+  await app.approve();
+  assert.deepEqual(app.channels, []);
+  assert.equal(app.db().payments.receipt.status, 'approved');
+  assert.match(JSON.stringify(app.sentMessages), /https:\/\/t\.me\/bahriddindev/);
+  assert.match(app.editedMessages[0].text, /@bahriddindev/);
+});
 
 test('CS uses built-in channel and prices when optional env overrides are absent', async () => {
   const app = setup('cs16', false);
@@ -78,4 +89,11 @@ test('menu includes CS and configured prices enable payment', () => {
     vm.runInContext("productTitle('ru')", app.context),
     /🎮 GENERALS & CS 1\.6 ANDROID & Gemini Pro/
   );
+});
+
+test('menu includes Gemini and support is product-specific', () => {
+  const app = setup('gemini');
+  assert.match(JSON.stringify(vm.runInContext('productKeyboard()', app.context)), /product_gemini/);
+  assert.match(JSON.stringify(vm.runInContext("mainKeyboard('ru', 'gemini')", app.context)), /https:\/\/t\.me\/bahriddindev/);
+  assert.match(JSON.stringify(vm.runInContext("mainKeyboard('ru', 'android')", app.context)), /https:\/\/t\.me\/mirzajonows/);
 });

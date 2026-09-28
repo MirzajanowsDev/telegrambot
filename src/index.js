@@ -6,6 +6,8 @@ const path = require('path');
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = Number(process.env.ADMIN_ID);
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || '';
+const DEFAULT_SUPPORT_USERNAME = process.env.DEFAULT_SUPPORT_USERNAME || ADMIN_USERNAME || 'mirzajonows';
+const GEMINI_SUPPORT_USERNAME = process.env.GEMINI_SUPPORT_USERNAME || 'bahriddindev';
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const CHANNEL_CS16_ID = process.env.CHANNEL_CS16_ID || '-1004335642053';
 const INVITE_EXPIRE_MINUTES = Number(process.env.INVITE_EXPIRE_MINUTES || 60);
@@ -118,8 +120,9 @@ function languageKeyboard() {
 function productKeyboard() {
   return Markup.inlineKeyboard([
     [Markup.button.callback(products.android.name, 'product_android')],
-    [Markup.button.callback(products.cs16.name, 'product_cs16')]
-    // iPhone and Gemini Pro temporarily hidden — not working yet
+    [Markup.button.callback(products.cs16.name, 'product_cs16')],
+    [Markup.button.callback(products.gemini.name, 'product_gemini')]
+    // iPhone temporarily hidden — not working yet
   ]);
 }
 
@@ -133,15 +136,27 @@ function productTitle(lang) {
 
 function mainTitle(lang, productCode) {
   const product = products[productCode];
+  const deliveryText = productCode === 'gemini'
+    ? tr(
+      lang,
+      '✅ После проверки администратором бот подтвердит оплату. Для получения Gemini Pro обратитесь в поддержку.',
+      "✅ Administrator tekshirganidan so'ng bot to'lovni tasdiqlaydi. Gemini Pro olish uchun yordam xizmatiga murojaat qiling."
+    )
+    : tr(
+      lang,
+      '✅ После проверки администратором бот сам выдаст доступ в закрытый канал.',
+      "✅ Administrator tekshirganidan so'ng bot yopiq kanalga kirish havolasini beradi."
+    );
   return tr(
     lang,
-    `🎮 *${product.name}*\n\nВыберите удобный способ оплаты и после оплаты отправьте чек.\n\n✅ После проверки администратором бот сам выдаст доступ в закрытый канал.`,
-    `🎮 *${product.name}*\n\nQulay to'lov turini tanlang va to'lovdan keyin chekni yuboring.\n\n✅ Administrator tekshirganidan so'ng bot yopiq kanalga kirish havolasini beradi.`
+    `🎮 *${product.name}*\n\nВыберите удобный способ оплаты и после оплаты отправьте чек.\n\n${deliveryText}`,
+    `🎮 *${product.name}*\n\nQulay to'lov turini tanlang va to'lovdan keyin chekni yuboring.\n\n${deliveryText}`
   );
 }
 
-function mainKeyboard(lang) {
-  const supportLink = ADMIN_USERNAME ? `https://t.me/${ADMIN_USERNAME}` : `tg://user?id=${ADMIN_ID}`;
+function mainKeyboard(lang, productCode) {
+  const supportUsername = productCode === 'gemini' ? GEMINI_SUPPORT_USERNAME : DEFAULT_SUPPORT_USERNAME;
+  const supportLink = `https://t.me/${supportUsername}`;
   return Markup.inlineKeyboard([
     [Markup.button.callback(tr(lang, '💳 Оплатить доступ', "💳 To'lov qilish"), 'choose_payment')],
     [Markup.button.callback(tr(lang, '📸 Отправить чек', '📸 Chek yuborish'), 'send_receipt')],
@@ -194,7 +209,7 @@ bot.action(/^product_(android|iphone|gemini|cs16)$/, async (ctx) => {
   const productCode = ctx.match[1];
   const lang = getUser(ctx.from.id).lang || 'ru';
   setUser(ctx.from.id, { product: productCode, payment_method: null, waiting_receipt: false });
-  await ctx.editMessageText(mainTitle(lang, productCode), { parse_mode: 'Markdown', ...mainKeyboard(lang) });
+  await ctx.editMessageText(mainTitle(lang, productCode), { parse_mode: 'Markdown', ...mainKeyboard(lang, productCode) });
 });
 
 bot.action('home', async (ctx) => {
@@ -205,7 +220,7 @@ bot.action('home', async (ctx) => {
   if (!user.product || !products[user.product]) {
     return ctx.editMessageText(productTitle(lang), productKeyboard());
   }
-  await ctx.editMessageText(mainTitle(lang, user.product), { parse_mode: 'Markdown', ...mainKeyboard(lang) });
+  await ctx.editMessageText(mainTitle(lang, user.product), { parse_mode: 'Markdown', ...mainKeyboard(lang, user.product) });
 });
 
 bot.action('choose_payment', async (ctx) => {
@@ -259,7 +274,7 @@ bot.action(/^pay_(ru|uz|kg)$/, async (ctx) => {
       `💳 *Оплата доступа*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nСумма: *${price.amount}*\n\nРеквизиты (нажмите, чтобы скопировать):\n\`${requisitesNumber}\` ${requisitesLabel}\n\nПосле оплаты нажмите «📸 Отправить чек».`,
       `💳 *Kirish uchun to'lov*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nSumma: *${price.amount}*\n\nRekvizitlar (nusxalash uchun bosing):\n\`${requisitesNumber}\` ${requisitesLabel}\n\nTo'lovdan so'ng «📸 Chek yuborish» tugmasini bosing.`
     ),
-    { parse_mode: 'Markdown', ...mainKeyboard(lang) }
+    { parse_mode: 'Markdown', ...mainKeyboard(lang, user.product) }
   );
 });
 
@@ -296,7 +311,7 @@ async function acceptReceipt(ctx) {
   if (!user.waiting_receipt || !user.product || !products[user.product] || !user.payment_method) {
     return ctx.reply(
       tr(lang, 'Сначала выберите оплату и нажмите «📸 Отправить чек».', "Avval to'lovni tanlang va «📸 Chek yuborish» tugmasini bosing."),
-      mainKeyboard(lang)
+      mainKeyboard(lang, user.product)
     );
   }
 
@@ -340,14 +355,18 @@ async function acceptReceipt(ctx) {
     ]) }
   );
 
-  await ctx.reply(
-    tr(
+  const receiptConfirmation = user.product === 'gemini'
+    ? tr(
+      lang,
+      '✅ Чек получен!\n\nОжидайте проверки. После подтверждения обратитесь в поддержку для получения Gemini Pro.',
+      "✅ Chek qabul qilindi!\n\nTekshiruvni kuting. Tasdiqlangach Gemini Pro olish uchun yordam xizmatiga murojaat qiling."
+    )
+    : tr(
       lang,
       '✅ Чек получен!\n\nОжидайте проверки. После подтверждения бот автоматически отправит ссылку в закрытый канал.',
       "✅ Chek qabul qilindi!\n\nTekshiruvni kuting. Tasdiqlangach bot yopiq kanal havolasini avtomatik yuboradi."
-    ),
-    mainKeyboard(lang)
-  );
+    );
+  await ctx.reply(receiptConfirmation, mainKeyboard(lang, user.product));
 }
 
 bot.on('photo', acceptReceipt);
@@ -371,11 +390,42 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
   if (!payment) return ctx.reply('Платёж не найден.');
   if (payment.status === 'approved') return ctx.reply('Уже подтверждено.');
 
+  const lang = payment.lang || 'ru';
+  const productLine = payment.product_name ? `📦 ${payment.product_name}\n` : '';
+
+  if (payment.product === 'gemini') {
+    payment.status = 'approved';
+    payment.approved_at = new Date().toISOString();
+    saveDb(db);
+
+    try {
+      await ctx.telegram.sendMessage(
+        payment.user_id,
+        tr(
+          lang,
+          `✅ *Оплата подтверждена!*\n\n${productLine}${payment.country} — ${payment.price}\n\nДля получения Gemini Pro напишите в поддержку.`,
+          `✅ *To'lov tasdiqlandi!*\n\n${productLine}${payment.country} — ${payment.price}\n\nGemini Pro olish uchun yordam xizmatiga yozing.`
+        ),
+        { parse_mode: 'Markdown', ...mainKeyboard(lang, 'gemini') }
+      );
+      await ctx.editMessageText(
+        `✅ ОПЛАТА GEMINI PRO ПОДТВЕРЖДЕНА\n\n${profileBlock(payment)}\n${productLine}${payment.country} — ${payment.price}\nПользователю отправлен контакт @${GEMINI_SUPPORT_USERNAME}.`,
+        { parse_mode: 'HTML' }
+      );
+    } catch (err) {
+      console.error('DELIVERY ERROR:', err);
+      await ctx.editMessageText(
+        `✅ ОПЛАТА GEMINI PRO ПОДТВЕРЖДЕНА, но уведомление не доставлено пользователю.\n\n${profileBlock(payment)}\n${productLine}${payment.country} — ${payment.price}\n\nСвяжитесь с пользователем вручную.`,
+        { parse_mode: 'HTML' }
+      );
+    }
+    return;
+  }
+
   // Resolve from the paid product, never the user's current menu selection.
   const channelId = payment.product === 'cs16' ? CHANNEL_CS16_ID : CHANNEL_ID;
 
   const expireDate = Math.floor(Date.now() / 1000) + INVITE_EXPIRE_MINUTES * 60;
-  const productLine = payment.product_name ? `📦 ${payment.product_name}\n` : '';
 
   let invite;
   try {
@@ -393,8 +443,6 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
   payment.approved_at = new Date().toISOString();
   payment.invite_link = invite.invite_link;
   saveDb(db);
-
-  const lang = payment.lang || 'ru';
 
   try {
     await ctx.telegram.sendMessage(
@@ -448,7 +496,7 @@ bot.action(/^reject:(.+)$/, async (ctx) => {
       '❌ Оплата не подтверждена.\n\nПроверьте чек и реквизиты. Если была ошибка, отправьте чек повторно.',
       "❌ To'lov tasdiqlanmadi.\n\nChek va rekvizitlarni tekshiring. Xatolik bo'lsa, chekni qayta yuboring."
     ),
-    mainKeyboard(lang)
+    mainKeyboard(lang, payment.product)
   );
 
   await ctx.editMessageText(
@@ -470,7 +518,7 @@ bot.action('status', async (ctx) => {
   if (!payments.length) {
     return ctx.reply(
       tr(lang, 'У вас пока нет отправленных чеков.', 'Siz hali chek yubormagansiz.'),
-      mainKeyboard(lang)
+      mainKeyboard(lang, user.product)
     );
   }
 
@@ -484,7 +532,7 @@ bot.action('status', async (ctx) => {
 
   await ctx.reply(
     `${statusMap[p.status] || p.status}\n${productLine}${p.country} — ${p.price}`,
-    mainKeyboard(lang)
+    mainKeyboard(lang, p.product)
   );
 });
 
