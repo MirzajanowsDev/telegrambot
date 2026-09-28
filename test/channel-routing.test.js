@@ -61,19 +61,18 @@ for (const product of ['cs16', 'android', 'iphone', 'gemini', undefined]) {
   });
 }
 
-test('missing CS channel blocks approval without falling back to Generals', async () => {
+test('CS uses built-in channel and prices when optional env overrides are absent', async () => {
   const app = setup('cs16', false);
   await app.approve();
-  assert.deepEqual(app.channels, []);
-  assert.equal(app.db().payments.receipt.status, 'pending');
-  assert.match(app.replies[0], /CHANNEL_CS16_ID/);
-  assert.equal(vm.runInContext("isProductReady('cs16')", app.context), false);
-  assert.equal(vm.runInContext("isProductReady('android')", app.context), true);
+  assert.deepEqual(app.channels, ['-1004335642053']);
+  assert.equal(app.db().payments.receipt.status, 'approved');
+  assert.equal(vm.runInContext('products.cs16.prices.ru.amount', app.context), '700 ₽');
+  assert.equal(vm.runInContext('products.cs16.prices.uz.amount', app.context), '50 000 сум');
+  assert.equal(vm.runInContext('products.cs16.prices.kg.amount', app.context), '500 сом');
 });
 
 test('menu includes CS and configured prices enable payment', () => {
   const app = setup('cs16');
-  assert.equal(vm.runInContext("isProductReady('cs16')", app.context), true);
   assert.match(JSON.stringify(vm.runInContext('productKeyboard()', app.context)), /product_cs16/);
   assert.match(
     vm.runInContext("productTitle('ru')", app.context),
