@@ -10,9 +10,11 @@ function setup(product, configured = true) {
     receipt: { product, user_id: 2, status: 'pending' }
   } };
   const actions = [];
+  const hears = [];
   let startHandler;
   class FakeBot {
     action(pattern, handler) { actions.push({ pattern, handler }); }
+    hears(trigger, handler) { hears.push({ trigger, handler }); }
     start(handler) { startHandler = handler; } on() {} catch() {}
     launch() { return Promise.resolve(); }
   }
@@ -44,10 +46,17 @@ function setup(product, configured = true) {
   const sentMessages = [];
   const editedMessages = [];
   const deletedMessages = [];
+  const replyExtras = [];
   const ctx = {
     from: { id: 1 }, match: ['', 'receipt'],
     callbackQuery: { message: { message_id: 99 } },
-    answerCbQuery: async () => {}, reply: async text => replies.push(text),
+    message: { message_id: 100 },
+    answerCbQuery: async () => {},
+    reply: async (text, extra) => {
+      replies.push(text);
+      replyExtras.push(extra);
+      return { message_id: 200 };
+    },
     deleteMessage: async messageId => deletedMessages.push(messageId),
     editMessageText: async (text, extra) => editedMessages.push({ text, extra }),
     telegram: {
@@ -59,13 +68,14 @@ function setup(product, configured = true) {
       sendMessage: async (chatId, text, extra) => sentMessages.push({ chatId, text, extra })
     }
   };
-  return { context, channels, replies, sentMessages, editedMessages, deletedMessages, db: () => db,
+  return { context, channels, replies, replyExtras, sentMessages, editedMessages, deletedMessages, db: () => db,
     ctx,
     start: () => startHandler(ctx),
     approve: () => actions.find(a => String(a.pattern).includes('approve:')).handler(ctx),
     reject: () => actions.find(a => String(a.pattern).includes('reject:')).handler(ctx),
     retry: () => actions.find(a => String(a.pattern).includes('retry:')).handler(ctx),
     status: () => actions.find(a => a.pattern === 'status').handler(ctx),
+    hear: text => hears.find(item => item.trigger === text).handler(ctx),
     selectScopedPayment: (productCode, methodCode) => {
       ctx.match = ['', productCode, methodCode];
       return actions.find(a => String(a.pattern).startsWith('/^pay_(android')).handler(ctx);
@@ -117,13 +127,16 @@ test('menu includes Gemini and support is product-specific', () => {
   assert.match(JSON.stringify(vm.runInContext("mainKeyboard('ru', 'android')", app.context)), /https:\/\/t\.me\/mirzajonows/);
 });
 
-test('main menu has inline language buttons and no switch-product button', () => {
+test('language and product navigation use the persistent reply keyboard', () => {
   const app = setup('android');
-  const keyboard = vm.runInContext("mainKeyboard('ru', 'android').reply_markup.inline_keyboard", app.context);
-  assert.ok(keyboard.some(row => row.length === 2 &&
-    row[0].callback_data === 'lang_ru' && row[1].callback_data === 'lang_uz'));
-  assert.equal(keyboard.flat().some(button => button.callback_data === 'choose_product'), false);
-  assert.equal(keyboard.flat().some(button => button.callback_data === 'language'), false);
+  const inlineKeyboard = vm.runInContext("mainKeyboard('ru', 'android').reply_markup.inline_keyboard", app.context);
+  const replyKeyboard = vm.runInContext('replyMenuKeyboard().reply_markup', app.context);
+  assert.equal(inlineKeyboard.flat().some(button => button.callback_data?.startsWith('lang_')), false);
+  assert.equal(inlineKeyboard.flat().some(button => button.callback_data === 'choose_product'), false);
+  assert.equal(replyKeyboard.resize_keyboard, true);
+  assert.equal(replyKeyboard.is_persistent, true);
+  assert.deepEqual(Array.from(replyKeyboard.keyboard[0]), ['🇷🇺 Русский', "🇺🇿 O'zbekcha"]);
+  assert.equal(replyKeyboard.keyboard[1][0], '🛍 Product menu');
 });
 
 test('/start clears the previous purchase selection', async () => {
@@ -133,6 +146,28 @@ test('/start clears the previous purchase selection', async () => {
   assert.equal(app.db().users['1'].product, null);
   assert.equal(app.db().users['1'].payment_method, null);
   assert.equal(app.db().users['1'].waiting_receipt, false);
+  assert.equal(app.replyExtras[0].reply_markup.is_persistent, true);
+});
+
+test('reply keyboard changes language without losing the selected product', async () => {
+  const app = setup('android');
+  app.db().users['1'] = { lang: 'ru', product: 'android', payment_method: 'ru' };
+  await app.hear("🇺🇿 O'zbekcha");
+  assert.equal(app.db().users['1'].lang, 'uz');
+  assert.equal(app.db().users['1'].product, 'android');
+  assert.match(app.replies[0], /Qulay to'lov/);
+  assert.deepEqual(app.deletedMessages, [100]);
+});
+
+test('Product menu cancels unfinished selection and opens all products', async () => {
+  const app = setup('gemini');
+  app.db().users['1'] = { lang: 'ru', product: 'gemini', payment_method: 'uz', waiting_receipt: true };
+  await app.hear('🛍 Product menu');
+  assert.equal(app.db().users['1'].product, null);
+  assert.equal(app.db().users['1'].payment_method, null);
+  assert.equal(app.db().users['1'].waiting_receipt, false);
+  assert.match(JSON.stringify(app.replyExtras[0]), /product_gemini/);
+  assert.deepEqual(app.deletedMessages, [100]);
 });
 
 test('payment buttons retain the product shown on the original message', async () => {
