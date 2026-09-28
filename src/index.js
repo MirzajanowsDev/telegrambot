@@ -7,7 +7,9 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = Number(process.env.ADMIN_ID);
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || '';
 const CHANNEL_ID = process.env.CHANNEL_ID;
+const CHANNEL_CS16_ID = process.env.CHANNEL_CS16_ID;
 const INVITE_EXPIRE_MINUTES = Number(process.env.INVITE_EXPIRE_MINUTES || 60);
+const BOT_HEADING = '🎮 GENERALS & CS 1.6 ANDROID & Gemini Pro';
 
 const countryNames = {
   ru: '🇷🇺 Россия',
@@ -22,6 +24,14 @@ const PAYMENT_UZ_ANDROID = process.env.PAYMENT_UZ_ANDROID || "Rekvizitlar ko'rsa
 const PAYMENT_UZ_GEMINI = process.env.PAYMENT_UZ_GEMINI || "Rekvizitlar ko'rsatilmagan";
 
 const products = {
+  cs16: {
+    name: '🎯 Counter-Strike 1.6',
+    prices: {
+      ru: { amount: process.env.PRICE_CS16_RU || '', requisites: PAYMENT_RU },
+      uz: { amount: process.env.PRICE_CS16_UZ || '', requisites: process.env.PAYMENT_UZ_CS16 || PAYMENT_UZ_ANDROID },
+      kg: { amount: process.env.PRICE_CS16_KG || '', requisites: PAYMENT_KG }
+    }
+  },
   android: {
     name: '🎮 Generals Android',
     prices: {
@@ -107,7 +117,8 @@ function languageKeyboard() {
 
 function productKeyboard() {
   return Markup.inlineKeyboard([
-    [Markup.button.callback(products.android.name, 'product_android')]
+    [Markup.button.callback(products.android.name, 'product_android')],
+    [Markup.button.callback(products.cs16.name, 'product_cs16')]
     // iPhone and Gemini Pro temporarily hidden — not working yet
   ]);
 }
@@ -115,9 +126,21 @@ function productKeyboard() {
 function productTitle(lang) {
   return tr(
     lang,
-    '🎮 GENERALS ANDROID\n\nЧто хотите приобрести?',
-    "🎮 GENERALS ANDROID\n\nNimani sotib olmoqchisiz?"
+    `${BOT_HEADING}\n\nЧто хотите приобрести?`,
+    `${BOT_HEADING}\n\nNimani sotib olmoqchisiz?`
   );
+}
+
+function isProductReady(productCode) {
+  return productCode !== 'cs16' || Boolean(
+    CHANNEL_CS16_ID && Object.values(products.cs16.prices).every(price => price.amount.trim())
+  );
+}
+
+function unavailableMessage(lang) {
+  return tr(lang,
+    '⏳ Оплата Counter-Strike 1.6 пока не настроена. Обратитесь в поддержку.',
+    "⏳ Counter-Strike 1.6 uchun to'lov hali sozlanmagan. Yordam xizmatiga murojaat qiling.");
 }
 
 function mainTitle(lang, productCode) {
@@ -157,7 +180,7 @@ bot.start(async (ctx) => {
     first_name: ctx.from.first_name || '',
     last_seen: new Date().toISOString()
   });
-  await ctx.reply('🎮 GENERALS ANDROID\n\nВыберите язык / Tilni tanlang:', languageKeyboard());
+  await ctx.reply(`${BOT_HEADING}\n\nВыберите язык / Tilni tanlang:`, languageKeyboard());
 });
 
 bot.action('language', async (ctx) => {
@@ -178,7 +201,7 @@ bot.action('choose_product', async (ctx) => {
   await ctx.editMessageText(productTitle(lang), productKeyboard());
 });
 
-bot.action(/^product_(android|iphone|gemini)$/, async (ctx) => {
+bot.action(/^product_(android|iphone|gemini|cs16)$/, async (ctx) => {
   await safeAnswer(ctx);
   const productCode = ctx.match[1];
   const lang = getUser(ctx.from.id).lang || 'ru';
@@ -209,6 +232,8 @@ bot.action('choose_payment', async (ctx) => {
     );
   }
 
+  if (!isProductReady(user.product)) return ctx.reply(unavailableMessage(lang), mainKeyboard(lang));
+
   await ctx.reply(
     tr(
       lang,
@@ -232,8 +257,12 @@ bot.action(/^pay_(ru|uz|kg)$/, async (ctx) => {
     );
   }
 
+  if (!isProductReady(user.product)) return ctx.reply(unavailableMessage(lang), mainKeyboard(lang));
+
   const product = products[user.product];
   const price = product.prices[methodCode];
+  const [requisitesNumber, ...requisitesRest] = price.requisites.split(' ');
+  const requisitesLabel = requisitesRest.join(' ');
 
   setUser(ctx.from.id, {
     payment_method: methodCode,
@@ -243,8 +272,8 @@ bot.action(/^pay_(ru|uz|kg)$/, async (ctx) => {
   await ctx.reply(
     tr(
       lang,
-      `💳 *Оплата доступа*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nСумма: *${price.amount}*\n\nРеквизиты (нажмите, чтобы скопировать):\n\`${price.requisites}\`\n\nПосле оплаты нажмите «📸 Отправить чек».`,
-      `💳 *Kirish uchun to'lov*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nSumma: *${price.amount}*\n\nRekvizitlar (nusxalash uchun bosing):\n\`${price.requisites}\`\n\nTo'lovdan so'ng «📸 Chek yuborish» tugmasini bosing.`
+      `💳 *Оплата доступа*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nСумма: *${price.amount}*\n\nРеквизиты (нажмите, чтобы скопировать):\n\`${requisitesNumber}\` ${requisitesLabel}\n\nПосле оплаты нажмите «📸 Отправить чек».`,
+      `💳 *Kirish uchun to'lov*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nSumma: *${price.amount}*\n\nRekvizitlar (nusxalash uchun bosing):\n\`${requisitesNumber}\` ${requisitesLabel}\n\nTo'lovdan so'ng «📸 Chek yuborish» tugmasini bosing.`
     ),
     { parse_mode: 'Markdown', ...mainKeyboard(lang) }
   );
@@ -262,7 +291,9 @@ bot.action('send_receipt', async (ctx) => {
     );
   }
 
+  if (!isProductReady(user.product)) return ctx.reply(unavailableMessage(lang), mainKeyboard(lang));
   setUser(ctx.from.id, { waiting_receipt: true });
+
   const product = products[user.product];
   const price = product.prices[user.payment_method];
 
@@ -285,6 +316,8 @@ async function acceptReceipt(ctx) {
       mainKeyboard(lang)
     );
   }
+
+  if (!isProductReady(user.product)) return ctx.reply(unavailableMessage(lang), mainKeyboard(lang));
 
   const product = products[user.product];
   const price = product.prices[user.payment_method];
@@ -357,12 +390,16 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
   if (!payment) return ctx.reply('Платёж не найден.');
   if (payment.status === 'approved') return ctx.reply('Уже подтверждено.');
 
+  // Resolve from the paid product, never the user's current menu selection.
+  const channelId = payment.product === 'cs16' ? CHANNEL_CS16_ID : CHANNEL_ID;
+  if (!channelId) return ctx.reply('❗ Укажите CHANNEL_CS16_ID в .env и перезапустите бота. Платёж пока не подтверждён.');
+
   const expireDate = Math.floor(Date.now() / 1000) + INVITE_EXPIRE_MINUTES * 60;
   const productLine = payment.product_name ? `📦 ${payment.product_name}\n` : '';
 
   let invite;
   try {
-    invite = await ctx.telegram.createChatInviteLink(CHANNEL_ID, {
+    invite = await ctx.telegram.createChatInviteLink(channelId, {
       name: `pay_${payment.user_id}`,
       expire_date: expireDate,
       member_limit: 1
