@@ -92,15 +92,15 @@ for (const product of ['cs16', 'android', 'iphone', undefined]) {
   });
 }
 
-test('Gemini approval sends support contact without creating a channel invite', async () => {
+test('Gemini approval uses the default support contact without creating a channel invite', async () => {
   const app = setup('gemini');
   await app.approve();
   assert.deepEqual(app.channels, []);
   assert.equal(app.db().payments.receipt.status, 'approved');
-  assert.match(JSON.stringify(app.sentMessages), /https:\/\/t\.me\/bahriddindev/);
+  assert.match(JSON.stringify(app.sentMessages), /https:\/\/t\.me\/mirzajonows/);
   assert.match(app.sentMessages[0].text, /30 минут/);
   assert.match(app.sentMessages[0].text, /запись экрана/);
-  assert.match(app.editedMessages[0].text, /@bahriddindev/);
+  assert.match(app.editedMessages[0].text, /@mirzajonows/);
 });
 
 test('Gemini activation instructions follow the chosen Uzbek language', async () => {
@@ -131,10 +131,10 @@ test('menu includes CS and configured prices enable payment', () => {
   );
 });
 
-test('menu includes Gemini and support is product-specific', () => {
+test('menu includes Gemini and all products use the default support account', () => {
   const app = setup('gemini');
   assert.match(JSON.stringify(vm.runInContext('productKeyboard()', app.context)), /product_gemini/);
-  assert.match(JSON.stringify(vm.runInContext("mainKeyboard('ru', 'gemini')", app.context)), /https:\/\/t\.me\/bahriddindev/);
+  assert.match(JSON.stringify(vm.runInContext("mainKeyboard('ru', 'gemini')", app.context)), /https:\/\/t\.me\/mirzajonows/);
   assert.match(JSON.stringify(vm.runInContext("mainKeyboard('ru', 'android')", app.context)), /https:\/\/t\.me\/mirzajonows/);
 });
 

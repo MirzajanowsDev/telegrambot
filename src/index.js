@@ -7,7 +7,6 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = Number(process.env.ADMIN_ID);
 const ADMIN_USERNAME = normalizeUsername(process.env.ADMIN_USERNAME || '');
 const DEFAULT_SUPPORT_USERNAME = normalizeUsername(process.env.DEFAULT_SUPPORT_USERNAME || ADMIN_USERNAME || 'mirzajonows');
-const GEMINI_SUPPORT_USERNAME = normalizeUsername(process.env.GEMINI_SUPPORT_USERNAME || 'bahriddindev');
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const CHANNEL_CS16_ID = process.env.CHANNEL_CS16_ID || '-1004335642053';
 const INVITE_EXPIRE_MINUTES = Number(process.env.INVITE_EXPIRE_MINUTES || 60);
@@ -79,7 +78,7 @@ if (missingPaymentConfig.length) {
 if (!Number.isInteger(INVITE_EXPIRE_MINUTES) || INVITE_EXPIRE_MINUTES <= 0) {
   throw new Error('INVITE_EXPIRE_MINUTES должен быть положительным целым числом');
 }
-for (const [key, username] of Object.entries({ DEFAULT_SUPPORT_USERNAME, GEMINI_SUPPORT_USERNAME })) {
+for (const [key, username] of Object.entries({ DEFAULT_SUPPORT_USERNAME })) {
   if (!/^[A-Za-z0-9_]{5,32}$/.test(username)) {
     throw new Error(`${key} содержит некорректный Telegram username`);
   }
@@ -243,8 +242,7 @@ function mainTitle(lang, productCode) {
 }
 
 function mainKeyboard(lang, productCode) {
-  const supportUsername = productCode === 'gemini' ? GEMINI_SUPPORT_USERNAME : DEFAULT_SUPPORT_USERNAME;
-  const supportLink = `https://t.me/${supportUsername}`;
+  const supportLink = `https://t.me/${DEFAULT_SUPPORT_USERNAME}`;
   return Markup.inlineKeyboard([
     [Markup.button.callback(tr(lang, '💳 Оплатить доступ', "💳 To'lov qilish"), 'choose_payment')],
     [Markup.button.callback(tr(lang, '📸 Отправить чек', '📸 Chek yuborish'), 'send_receipt')],
@@ -567,7 +565,7 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
       console.error('DELIVERY ERROR:', err);
     }
     const deliveryLine = delivered
-      ? `Пользователю отправлены инструкции. @${GEMINI_SUPPORT_USERNAME} должен отправить ссылку активации в течение 30 минут.`
+      ? `Пользователю отправлены инструкции. @${DEFAULT_SUPPORT_USERNAME} должен отправить ссылку активации в течение 30 минут.`
       : 'Уведомление не доставлено пользователю. Свяжитесь с ним вручную.';
     await ctx.editMessageText(
       `✅ ОПЛАТА GEMINI PRO ПОДТВЕРЖДЕНА\n\n${profileBlock(payment)}\n${productLine}${payment.country} — ${payment.price}\n${deliveryLine}`,
@@ -689,7 +687,7 @@ bot.action(/^reject:(.+)$/, async (ctx) => {
         [Markup.button.callback(tr(lang, '📸 Отправить чек повторно', '📸 Chekni qayta yuborish'), `retry:${paymentId}`)],
         [Markup.button.url(
           tr(lang, '🆘 Поддержка', '🆘 Yordam'),
-          `https://t.me/${payment.product === 'gemini' ? GEMINI_SUPPORT_USERNAME : DEFAULT_SUPPORT_USERNAME}`
+          `https://t.me/${DEFAULT_SUPPORT_USERNAME}`
         )]
       ])
     );
