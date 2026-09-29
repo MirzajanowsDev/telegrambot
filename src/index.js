@@ -26,7 +26,7 @@ const PAYMENT_UZ_GEMINI = process.env.PAYMENT_UZ_GEMINI || "Rekvizitlar ko'rsati
 
 const products = {
   cs16: {
-    name: '🎯 Counter-Strike 1.6',
+    name: '🎯 Counter-Strike 1.6 Android',
     prices: {
       ru: { amount: process.env.PRICE_CS16_RU || '700 ₽', requisites: PAYMENT_RU },
       uz: { amount: process.env.PRICE_CS16_UZ || '50 000 сум', requisites: process.env.PAYMENT_UZ_CS16 || PAYMENT_UZ_ANDROID },
@@ -221,6 +221,14 @@ function geminiActivationInstructions(lang) {
   );
 }
 
+function geminiPackageDetails(lang) {
+  return tr(
+    lang,
+    '📦 *В пакет на срок до 18 месяцев входят:*\n• Gemini Pro\n• Google One\n• Nano Banana\n• 5 TB Google Drive\n• Antigravity\n• Flow',
+    "📦 *18 oygacha bo'lgan paket tarkibiga quyidagilar kiradi:*\n• Gemini Pro\n• Google One\n• Nano Banana\n• 5 TB Google Drive\n• Antigravity\n• Flow"
+  );
+}
+
 function mainTitle(lang, productCode) {
   const product = products[productCode];
   const deliveryText = productCode === 'gemini'
@@ -234,10 +242,11 @@ function mainTitle(lang, productCode) {
       '✅ После проверки администратором бот сам выдаст доступ в закрытый канал.',
       "✅ Administrator tekshirganidan so'ng bot yopiq kanalga kirish havolasini beradi."
     );
+  const packageDetails = productCode === 'gemini' ? `\n\n${geminiPackageDetails(lang)}` : '';
   return tr(
     lang,
-    `🎮 *${product.name}*\n\nВыберите удобный способ оплаты и после оплаты отправьте чек.\n\n${deliveryText}`,
-    `🎮 *${product.name}*\n\nQulay to'lov turini tanlang va to'lovdan keyin chekni yuboring.\n\n${deliveryText}`
+    `🎮 *${product.name}*${packageDetails}\n\nВыберите удобный способ оплаты и после оплаты отправьте чек.\n\n${deliveryText}`,
+    `🎮 *${product.name}*${packageDetails}\n\nQulay to'lov turini tanlang va to'lovdan keyin chekni yuboring.\n\n${deliveryText}`
   );
 }
 

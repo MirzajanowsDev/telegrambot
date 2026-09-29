@@ -124,7 +124,9 @@ test('CS uses built-in channel and prices when optional env overrides are absent
 
 test('menu includes CS and configured prices enable payment', () => {
   const app = setup('cs16');
-  assert.match(JSON.stringify(vm.runInContext('productKeyboard()', app.context)), /product_cs16/);
+  const keyboard = JSON.stringify(vm.runInContext('productKeyboard()', app.context));
+  assert.match(keyboard, /product_cs16/);
+  assert.match(keyboard, /Counter-Strike 1.6 Android/);
   assert.match(
     vm.runInContext("productTitle('ru')", app.context),
     /🎮 GENERALS & CS 1\.6 ANDROID & Gemini Pro/
@@ -136,6 +138,15 @@ test('menu includes Gemini and all products use the default support account', ()
   assert.match(JSON.stringify(vm.runInContext('productKeyboard()', app.context)), /product_gemini/);
   assert.match(JSON.stringify(vm.runInContext("mainKeyboard('ru', 'gemini')", app.context)), /https:\/\/t\.me\/mirzajonows/);
   assert.match(JSON.stringify(vm.runInContext("mainKeyboard('ru', 'android')", app.context)), /https:\/\/t\.me\/mirzajonows/);
+});
+
+test('Gemini selection shows the complete package for up to 18 months', () => {
+  const app = setup('gemini');
+  const title = vm.runInContext("mainTitle('ru', 'gemini')", app.context);
+  assert.match(title, /до 18 месяцев/);
+  for (const product of ['Gemini Pro', 'Google One', 'Nano Banana', '5 TB Google Drive', 'Antigravity', 'Flow']) {
+    assert.match(title, new RegExp(product));
+  }
 });
 
 test('language and product navigation use the persistent reply keyboard', () => {
