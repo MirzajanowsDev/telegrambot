@@ -159,8 +159,8 @@ test('normal navigation has two localized buttons and language choices stay sepa
   assert.equal(inlineKeyboard.flat().some(button => button.callback_data === 'choose_product'), false);
   assert.equal(russianMenu.resize_keyboard, true);
   assert.equal(russianMenu.is_persistent, true);
-  assert.deepEqual(Array.from(russianMenu.keyboard[0]), ['🛒 Меню товаров', '🌐 Изменить язык']);
-  assert.deepEqual(Array.from(uzbekMenu.keyboard[0]), ['🛒 Mahsulotlar', "🌐 Tilni o'zgartirish"]);
+  assert.deepEqual(Array.from(russianMenu.keyboard, row => Array.from(row)), [['🛒 Меню товаров'], ['🌐 Изменить язык']]);
+  assert.deepEqual(Array.from(uzbekMenu.keyboard, row => Array.from(row)), [['🛒 Mahsulotlar'], ["🌐 Tilni o'zgartirish"]]);
   assert.deepEqual(Array.from(languageChoices.keyboard[0]), ['🇷🇺 Русский', "🇺🇿 O'zbekcha"]);
 });
 
@@ -187,7 +187,10 @@ test('choosing a language deletes its prompt and restores localized navigation',
   assert.equal(app.db().users['1'].language_prompt_message_id, null);
   assert.match(app.replies[0], /O'zbek tili tanlandi/);
   assert.match(app.replies[1], /Qulay to'lov/);
-  assert.deepEqual(Array.from(app.replyExtras[0].reply_markup.keyboard[0]), ['🛒 Mahsulotlar', "🌐 Tilni o'zgartirish"]);
+  assert.deepEqual(
+    Array.from(app.replyExtras[0].reply_markup.keyboard, row => Array.from(row)),
+    [['🛒 Mahsulotlar'], ["🌐 Tilni o'zgartirish"]]
+  );
   assert.deepEqual(app.deletedMessages, [100, 321]);
 });
 

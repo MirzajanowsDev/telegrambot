@@ -194,10 +194,8 @@ function languageKeyboard() {
 
 function replyMenuKeyboard(lang) {
   return Markup.keyboard([
-    [
-      tr(lang, '🛒 Меню товаров', '🛒 Mahsulotlar'),
-      tr(lang, '🌐 Изменить язык', "🌐 Tilni o'zgartirish")
-    ]
+    [tr(lang, '🛒 Меню товаров', '🛒 Mahsulotlar')],
+    [tr(lang, '🌐 Изменить язык', "🌐 Tilni o'zgartirish")]
   ]).resize().persistent();
 }
 
