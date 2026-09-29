@@ -55,7 +55,7 @@ function setup(product, configured = true) {
     reply: async (text, extra) => {
       replies.push(text);
       replyExtras.push(extra);
-      return { message_id: 200 };
+      return { message_id: 200 + replies.length };
     },
     deleteMessage: async messageId => deletedMessages.push(messageId),
     editMessageText: async (text, extra) => editedMessages.push({ text, extra }),
@@ -149,16 +149,19 @@ test('Gemini selection shows the complete package for up to 18 months', () => {
   }
 });
 
-test('language and product navigation use the persistent reply keyboard', () => {
+test('normal navigation has two localized buttons and language choices stay separate', () => {
   const app = setup('android');
   const inlineKeyboard = vm.runInContext("mainKeyboard('ru', 'android').reply_markup.inline_keyboard", app.context);
-  const replyKeyboard = vm.runInContext('replyMenuKeyboard().reply_markup', app.context);
+  const russianMenu = vm.runInContext("replyMenuKeyboard('ru').reply_markup", app.context);
+  const uzbekMenu = vm.runInContext("replyMenuKeyboard('uz').reply_markup", app.context);
+  const languageChoices = vm.runInContext('languageKeyboard().reply_markup', app.context);
   assert.equal(inlineKeyboard.flat().some(button => button.callback_data?.startsWith('lang_')), false);
   assert.equal(inlineKeyboard.flat().some(button => button.callback_data === 'choose_product'), false);
-  assert.equal(replyKeyboard.resize_keyboard, true);
-  assert.equal(replyKeyboard.is_persistent, true);
-  assert.deepEqual(Array.from(replyKeyboard.keyboard[0]), ['🇷🇺 Русский', "🇺🇿 O'zbekcha"]);
-  assert.equal(replyKeyboard.keyboard[1][0], '🛍 Product menu');
+  assert.equal(russianMenu.resize_keyboard, true);
+  assert.equal(russianMenu.is_persistent, true);
+  assert.deepEqual(Array.from(russianMenu.keyboard[0]), ['🛒 Меню товаров', '🌐 Изменить язык']);
+  assert.deepEqual(Array.from(uzbekMenu.keyboard[0]), ['🛒 Mahsulotlar', "🌐 Tilni o'zgartirish"]);
+  assert.deepEqual(Array.from(languageChoices.keyboard[0]), ['🇷🇺 Русский', "🇺🇿 O'zbekcha"]);
 });
 
 test('/start clears the previous purchase selection', async () => {
@@ -169,22 +172,46 @@ test('/start clears the previous purchase selection', async () => {
   assert.equal(app.db().users['1'].payment_method, null);
   assert.equal(app.db().users['1'].waiting_receipt, false);
   assert.equal(app.replyExtras[0].reply_markup.is_persistent, true);
+  assert.deepEqual(Array.from(app.replyExtras[0].reply_markup.keyboard[0]), ['🇷🇺 Русский', "🇺🇿 O'zbekcha"]);
+  assert.equal(app.db().users['1'].language_prompt_message_id, 201);
 });
 
-test('reply keyboard changes language without losing the selected product', async () => {
+test('choosing a language deletes its prompt and restores localized navigation', async () => {
   const app = setup('android');
-  app.db().users['1'] = { lang: 'ru', product: 'android', payment_method: 'ru' };
+  app.db().users['1'] = {
+    lang: 'ru', product: 'android', payment_method: 'ru', language_prompt_message_id: 321
+  };
   await app.hear("🇺🇿 O'zbekcha");
   assert.equal(app.db().users['1'].lang, 'uz');
   assert.equal(app.db().users['1'].product, 'android');
-  assert.match(app.replies[0], /Qulay to'lov/);
+  assert.equal(app.db().users['1'].language_prompt_message_id, null);
+  assert.match(app.replies[0], /O'zbek tili tanlandi/);
+  assert.match(app.replies[1], /Qulay to'lov/);
+  assert.deepEqual(Array.from(app.replyExtras[0].reply_markup.keyboard[0]), ['🛒 Mahsulotlar', "🌐 Tilni o'zgartirish"]);
+  assert.deepEqual(app.deletedMessages, [100, 321]);
+});
+
+test('Change language temporarily shows only Russian and Uzbek choices', async () => {
+  const app = setup('android');
+  app.db().users['1'] = { lang: 'ru', product: 'android', payment_method: 'ru' };
+  await app.hear('🌐 Изменить язык');
+  assert.match(app.replies[0], /Выберите язык/);
+  assert.deepEqual(Array.from(app.replyExtras[0].reply_markup.keyboard[0]), ['🇷🇺 Русский', "🇺🇿 O'zbekcha"]);
+  assert.equal(app.db().users['1'].language_prompt_message_id, 201);
   assert.deepEqual(app.deletedMessages, [100]);
+
+  app.ctx.message.message_id = 101;
+  await app.hear("🇺🇿 O'zbekcha");
+  assert.equal(app.db().users['1'].lang, 'uz');
+  assert.equal(app.db().users['1'].product, 'android');
+  assert.equal(app.db().users['1'].language_prompt_message_id, null);
+  assert.deepEqual(app.deletedMessages, [100, 101, 201]);
 });
 
 test('Product menu cancels unfinished selection and opens all products', async () => {
   const app = setup('gemini');
   app.db().users['1'] = { lang: 'ru', product: 'gemini', payment_method: 'uz', waiting_receipt: true };
-  await app.hear('🛍 Product menu');
+  await app.hear('🛒 Меню товаров');
   assert.equal(app.db().users['1'].product, null);
   assert.equal(app.db().users['1'].payment_method, null);
   assert.equal(app.db().users['1'].waiting_receipt, false);

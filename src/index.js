@@ -104,6 +104,10 @@ async function safeAnswer(ctx, text) {
 
 async function safeDeleteCallbackMessage(ctx) {
   const messageId = ctx.callbackQuery && ctx.callbackQuery.message && ctx.callbackQuery.message.message_id;
+  await safeDeleteMessage(ctx, messageId);
+}
+
+async function safeDeleteMessage(ctx, messageId) {
   if (!messageId || typeof ctx.deleteMessage !== 'function') return;
   try {
     await ctx.deleteMessage(messageId);
@@ -121,14 +125,7 @@ async function replyAndRemovePrevious(ctx, text, extra) {
 
 async function replyAndRemoveUserCommand(ctx, text, extra) {
   const message = await ctx.reply(text, extra);
-  if (ctx.message && typeof ctx.deleteMessage === 'function') {
-    try {
-      await ctx.deleteMessage(ctx.message.message_id);
-    } catch (err) {
-      const code = err && err.response && err.response.error_code;
-      if (code !== 400 && code !== 403) console.error('DELETE USER MESSAGE ERROR:', err);
-    }
-  }
+  await safeDeleteMessage(ctx, ctx.message && ctx.message.message_id);
   return message;
 }
 
@@ -189,10 +186,18 @@ function profileBlock(record) {
   return `👤 ${escapeHtml(record.first_name)} (${uname})\n🔗 <a href="${profileLink}">Профиль</a>\n🆔 ${record.user_id}`;
 }
 
-function replyMenuKeyboard() {
+function languageKeyboard() {
   return Markup.keyboard([
-    ['🇷🇺 Русский', "🇺🇿 O'zbekcha"],
-    ['🛍 Product menu']
+    ['🇷🇺 Русский', "🇺🇿 O'zbekcha"]
+  ]).resize().persistent();
+}
+
+function replyMenuKeyboard(lang) {
+  return Markup.keyboard([
+    [
+      tr(lang, '🛒 Меню товаров', '🛒 Mahsulotlar'),
+      tr(lang, '🌐 Изменить язык', "🌐 Tilni o'zgartirish")
+    ]
   ]).resize().persistent();
 }
 
@@ -277,36 +282,57 @@ bot.start(async (ctx) => {
     last_seen: new Date().toISOString(),
     product: null,
     payment_method: null,
-    waiting_receipt: false
+    waiting_receipt: false,
+    language_prompt_message_id: null
   });
-  await ctx.reply(`${BOT_HEADING}\n\nВыберите язык / Tilni tanlang:`, replyMenuKeyboard());
+  const prompt = await ctx.reply(`${BOT_HEADING}\n\nВыберите язык / Tilni tanlang:`, languageKeyboard());
+  setUser(ctx.from.id, { language_prompt_message_id: prompt.message_id });
 });
 
 // Compatibility for language buttons in messages sent by older bot versions.
 bot.action('language', async (ctx) => {
   await safeAnswer(ctx);
-  await ctx.reply('Выберите язык / Tilni tanlang:', replyMenuKeyboard());
+  const prompt = await replyAndRemovePrevious(ctx, 'Выберите язык / Tilni tanlang:', languageKeyboard());
+  setUser(ctx.from.id, { language_prompt_message_id: prompt.message_id });
 });
 
 async function selectLanguage(ctx, lang, answerCallback = false) {
   if (answerCallback) await safeAnswer(ctx);
   const user = getUser(ctx.from.id);
   setUser(ctx.from.id, { lang });
+  const navigationText = tr(lang, '✅ Выбран русский язык.', "✅ O'zbek tili tanlandi.");
   if (user.product && products[user.product]) {
     if (answerCallback) {
-      return ctx.editMessageText(
+      const message = await ctx.editMessageText(
         mainTitle(lang, user.product),
         { parse_mode: 'Markdown', ...mainKeyboard(lang, user.product) }
       );
+      await ctx.reply(navigationText, replyMenuKeyboard(lang));
+      setUser(ctx.from.id, { language_prompt_message_id: null });
+      return message;
     }
-    return replyAndRemoveUserCommand(
-      ctx,
+    await ctx.reply(navigationText, replyMenuKeyboard(lang));
+    const message = await ctx.reply(
       mainTitle(lang, user.product),
       { parse_mode: 'Markdown', ...mainKeyboard(lang, user.product) }
     );
+    await safeDeleteMessage(ctx, ctx.message && ctx.message.message_id);
+    await safeDeleteMessage(ctx, user.language_prompt_message_id);
+    setUser(ctx.from.id, { language_prompt_message_id: null });
+    return message;
   }
-  if (answerCallback) return ctx.editMessageText(productTitle(lang), productKeyboard());
-  return replyAndRemoveUserCommand(ctx, productTitle(lang), productKeyboard());
+  if (answerCallback) {
+    const message = await ctx.editMessageText(productTitle(lang), productKeyboard());
+    await ctx.reply(navigationText, replyMenuKeyboard(lang));
+    setUser(ctx.from.id, { language_prompt_message_id: null });
+    return message;
+  }
+  await ctx.reply(navigationText, replyMenuKeyboard(lang));
+  const message = await ctx.reply(productTitle(lang), productKeyboard());
+  await safeDeleteMessage(ctx, ctx.message && ctx.message.message_id);
+  await safeDeleteMessage(ctx, user.language_prompt_message_id);
+  setUser(ctx.from.id, { language_prompt_message_id: null });
+  return message;
 }
 
 bot.action(/^lang_(ru|uz)$/, async (ctx) => {
@@ -321,12 +347,24 @@ bot.hears("🇺🇿 O'zbekcha", async (ctx) => {
   return selectLanguage(ctx, 'uz');
 });
 
-bot.hears('🛍 Product menu', async (ctx) => {
+async function showLanguageChoices(ctx) {
+  const prompt = await replyAndRemoveUserCommand(ctx, 'Выберите язык / Tilni tanlang:', languageKeyboard());
+  setUser(ctx.from.id, { language_prompt_message_id: prompt.message_id });
+}
+
+bot.hears('🌐 Изменить язык', showLanguageChoices);
+bot.hears("🌐 Tilni o'zgartirish", showLanguageChoices);
+
+async function openProductMenu(ctx) {
   const user = getUser(ctx.from.id);
   const lang = user.lang || 'ru';
   setUser(ctx.from.id, { product: null, payment_method: null, waiting_receipt: false });
   return replyAndRemoveUserCommand(ctx, productTitle(lang), productKeyboard());
-});
+}
+
+bot.hears('🛒 Меню товаров', openProductMenu);
+bot.hears('🛒 Mahsulotlar', openProductMenu);
+bot.hears('🛍 Product menu', openProductMenu);
 
 bot.action('choose_product', async (ctx) => {
   await safeAnswer(ctx);
