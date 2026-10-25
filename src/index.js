@@ -9,8 +9,9 @@ const ADMIN_USERNAME = normalizeUsername(process.env.ADMIN_USERNAME || '');
 const DEFAULT_SUPPORT_USERNAME = normalizeUsername(process.env.DEFAULT_SUPPORT_USERNAME || ADMIN_USERNAME || 'mirzajonows');
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const CHANNEL_CS16_ID = process.env.CHANNEL_CS16_ID || '-1004335642053';
+const CHANNEL_DOTA2_ID = process.env.CHANNEL_DOTA2_ID ?? '-1004334193236';
 const INVITE_EXPIRE_MINUTES = Number(process.env.INVITE_EXPIRE_MINUTES || 60);
-const BOT_HEADING = '🎮 GENERALS & CS 1.6 ANDROID & Gemini Pro';
+const BOT_HEADING = '🎮 GENERALS & CS 1.6 ANDROID & Gemini Pro & Dota 2';
 
 const countryNames = {
   ru: '🇷🇺 Россия',
@@ -25,6 +26,15 @@ const PAYMENT_UZ_ANDROID = process.env.PAYMENT_UZ_ANDROID || "Rekvizitlar ko'rsa
 const PAYMENT_UZ_GEMINI = process.env.PAYMENT_UZ_GEMINI || "Rekvizitlar ko'rsatilmagan";
 
 const products = {
+  dota2: {
+    name: '⚔️ Dota 2 на Android',
+    nameUz: '⚔️ Android uchun Dota 2',
+    prices: {
+      ru: { amount: process.env.PRICE_DOTA2_RU || '1000 ₽', requisites: PAYMENT_RU },
+      uz: { amount: process.env.PRICE_DOTA2_UZ || '80 000 сум', requisites: process.env.PAYMENT_UZ_DOTA2 || PAYMENT_UZ_ANDROID },
+      kg: { amount: process.env.PRICE_DOTA2_KG || '600 сом', requisites: PAYMENT_KG }
+    }
+  },
   cs16: {
     name: '🎯 Counter-Strike 1.6 Android',
     prices: {
@@ -160,6 +170,36 @@ function tr(lang, ru, uz) {
   return lang === 'uz' ? uz : ru;
 }
 
+function productName(productCode, lang) {
+  const product = products[productCode];
+  return lang === 'uz' && product.nameUz ? product.nameUz : product.name;
+}
+
+function paymentAvailable(productCode) {
+  if (productCode !== 'dota2') return true;
+  return /^-100\d+$/.test(CHANNEL_DOTA2_ID)
+    && Object.values(products.dota2.prices).every(price => price.amount.trim() && price.requisites.trim());
+}
+
+function dota2Details(lang) {
+  return tr(lang,
+    '📱 Игра для Android на Unity. По информации продавца, APK запускается на телефоне без эмулятора. Перед оплатой уточните у поддержки требования и совместимость с вашим устройством. После проверки чека бот выдаст доступ в отдельный закрытый канал.',
+    "📱 Unity asosidagi Android o'yini. Sotuvchi ma'lumotiga ko'ra, APK telefonda emulyatorsiz ishlaydi. To'lovdan oldin yordam xizmatidan talablar va qurilmangizga mosligini aniqlang. Chek tekshirilgach bot alohida yopiq kanalga kirish beradi."
+  );
+}
+
+function paymentUnavailableText(lang) {
+  return tr(lang,
+    '⏳ Продажа Dota 2 на Android пока недоступна. Уточните готовность у поддержки. Не переводите деньги за этот товар.',
+    "⏳ Android uchun Dota 2 savdosi hozircha mavjud emas. Tayyorligini yordam xizmatidan aniqlang. Bu mahsulot uchun pul o'tkazmang."
+  );
+}
+
+function replyPaymentUnavailable(ctx, lang) {
+  setUser(ctx.from.id, { payment_method: null, waiting_receipt: false });
+  return replyAndRemovePrevious(ctx, paymentUnavailableText(lang), mainKeyboard(lang, 'dota2'));
+}
+
 function escapeHtml(str) {
   return (str || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -199,11 +239,12 @@ function replyMenuKeyboard(lang) {
   ]).resize().persistent();
 }
 
-function productKeyboard() {
+function productKeyboard(lang = 'ru') {
   return Markup.inlineKeyboard([
     [Markup.button.callback(products.android.name, 'product_android')],
     [Markup.button.callback(products.cs16.name, 'product_cs16')],
-    [Markup.button.callback(products.gemini.name, 'product_gemini')]
+    [Markup.button.callback(products.gemini.name, 'product_gemini')],
+    [Markup.button.callback(productName('dota2', lang), 'product_dota2')]
     // iPhone temporarily hidden — not working yet
   ]);
 }
@@ -233,7 +274,9 @@ function geminiPackageDetails(lang) {
 }
 
 function mainTitle(lang, productCode) {
-  const product = products[productCode];
+  if (productCode === 'dota2' && !paymentAvailable(productCode)) {
+    return `🎮 *${productName(productCode, lang)}*\n\n${dota2Details(lang)}\n\n${paymentUnavailableText(lang)}`;
+  }
   const deliveryText = productCode === 'gemini'
     ? tr(
       lang,
@@ -245,19 +288,22 @@ function mainTitle(lang, productCode) {
       '✅ После проверки администратором бот сам выдаст доступ в закрытый канал.',
       "✅ Administrator tekshirganidan so'ng bot yopiq kanalga kirish havolasini beradi."
     );
-  const packageDetails = productCode === 'gemini' ? `\n\n${geminiPackageDetails(lang)}` : '';
+  const packageDetails = productCode === 'gemini' ? `\n\n${geminiPackageDetails(lang)}`
+    : productCode === 'dota2' ? `\n\n${dota2Details(lang)}` : '';
   return tr(
     lang,
-    `🎮 *${product.name}*${packageDetails}\n\nВыберите удобный способ оплаты и после оплаты отправьте чек.\n\n${deliveryText}`,
-    `🎮 *${product.name}*${packageDetails}\n\nQulay to'lov turini tanlang va to'lovdan keyin chekni yuboring.\n\n${deliveryText}`
+    `🎮 *${productName(productCode, lang)}*${packageDetails}\n\nВыберите удобный способ оплаты и после оплаты отправьте чек.\n\n${deliveryText}`,
+    `🎮 *${productName(productCode, lang)}*${packageDetails}\n\nQulay to'lov turini tanlang va to'lovdan keyin chekni yuboring.\n\n${deliveryText}`
   );
 }
 
 function mainKeyboard(lang, productCode) {
   const supportLink = `https://t.me/${DEFAULT_SUPPORT_USERNAME}`;
   return Markup.inlineKeyboard([
-    [Markup.button.callback(tr(lang, '💳 Оплатить доступ', "💳 To'lov qilish"), 'choose_payment')],
-    [Markup.button.callback(tr(lang, '📸 Отправить чек', '📸 Chek yuborish'), 'send_receipt')],
+    ...(paymentAvailable(productCode) ? [
+      [Markup.button.callback(tr(lang, '💳 Оплатить доступ', "💳 To'lov qilish"), 'choose_payment')],
+      [Markup.button.callback(tr(lang, '📸 Отправить чек', '📸 Chek yuborish'), 'send_receipt')]
+    ] : []),
     [Markup.button.callback(tr(lang, '✅ Статус оплаты', "✅ To'lov holati"), 'status')],
     [Markup.button.url(tr(lang, '🆘 Поддержка', "🆘 Yordam"), supportLink)]
   ]);
@@ -320,13 +366,13 @@ async function selectLanguage(ctx, lang, answerCallback = false) {
     return message;
   }
   if (answerCallback) {
-    const message = await ctx.editMessageText(productTitle(lang), productKeyboard());
+    const message = await ctx.editMessageText(productTitle(lang), productKeyboard(lang));
     await ctx.reply(navigationText, replyMenuKeyboard(lang));
     setUser(ctx.from.id, { language_prompt_message_id: null });
     return message;
   }
   await ctx.reply(navigationText, replyMenuKeyboard(lang));
-  const message = await ctx.reply(productTitle(lang), productKeyboard());
+  const message = await ctx.reply(productTitle(lang), productKeyboard(lang));
   await safeDeleteMessage(ctx, ctx.message && ctx.message.message_id);
   await safeDeleteMessage(ctx, user.language_prompt_message_id);
   setUser(ctx.from.id, { language_prompt_message_id: null });
@@ -357,7 +403,7 @@ async function openProductMenu(ctx) {
   const user = getUser(ctx.from.id);
   const lang = user.lang || 'ru';
   setUser(ctx.from.id, { product: null, payment_method: null, waiting_receipt: false });
-  return replyAndRemoveUserCommand(ctx, productTitle(lang), productKeyboard());
+  return replyAndRemoveUserCommand(ctx, productTitle(lang), productKeyboard(lang));
 }
 
 bot.hears('🛒 Меню товаров', openProductMenu);
@@ -367,10 +413,10 @@ bot.hears('🛍 Product menu', openProductMenu);
 bot.action('choose_product', async (ctx) => {
   await safeAnswer(ctx);
   const lang = getUser(ctx.from.id).lang || 'ru';
-  await ctx.editMessageText(productTitle(lang), productKeyboard());
+  await ctx.editMessageText(productTitle(lang), productKeyboard(lang));
 });
 
-bot.action(/^product_(android|iphone|gemini|cs16)$/, async (ctx) => {
+bot.action(/^product_(android|iphone|gemini|cs16|dota2)$/, async (ctx) => {
   await safeAnswer(ctx);
   const productCode = ctx.match[1];
   const lang = getUser(ctx.from.id).lang || 'ru';
@@ -384,7 +430,7 @@ bot.action('home', async (ctx) => {
   const lang = user.lang || 'ru';
 
   if (!user.product || !products[user.product]) {
-    return ctx.editMessageText(productTitle(lang), productKeyboard());
+    return ctx.editMessageText(productTitle(lang), productKeyboard(lang));
   }
   await ctx.editMessageText(mainTitle(lang, user.product), { parse_mode: 'Markdown', ...mainKeyboard(lang, user.product) });
 });
@@ -393,12 +439,13 @@ bot.action('choose_payment', async (ctx) => {
   await safeAnswer(ctx);
   const user = getUser(ctx.from.id);
   const lang = user.lang || 'ru';
+  if (!paymentAvailable(user.product)) return replyPaymentUnavailable(ctx, lang);
 
   if (!user.product || !products[user.product]) {
     return replyAndRemovePrevious(
       ctx,
       tr(lang, 'Сначала выберите товар.', 'Avval mahsulotni tanlang.'),
-      productKeyboard()
+      productKeyboard(lang)
     );
   }
 
@@ -417,12 +464,13 @@ async function selectPayment(ctx, productCode, methodCode) {
   await safeAnswer(ctx);
   const user = getUser(ctx.from.id);
   const lang = user.lang || 'ru';
+  if (!paymentAvailable(productCode)) return replyPaymentUnavailable(ctx, lang);
 
   if (!productCode || !products[productCode]) {
     return replyAndRemovePrevious(
       ctx,
       tr(lang, 'Сначала выберите товар.', 'Avval mahsulotni tanlang.'),
-      productKeyboard()
+      productKeyboard(lang)
     );
   }
 
@@ -440,14 +488,14 @@ async function selectPayment(ctx, productCode, methodCode) {
     ctx,
     tr(
       lang,
-      `💳 *Оплата доступа*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nСумма: *${price.amount}*\n\nРеквизиты (нажмите, чтобы скопировать):\n\`${requisitesNumber}\` ${requisitesLabel}\n\nПосле оплаты нажмите «📸 Отправить чек».`,
-      `💳 *Kirish uchun to'lov*\n\n📦 ${product.name}\n${countryNames[methodCode]}\nSumma: *${price.amount}*\n\nRekvizitlar (nusxalash uchun bosing):\n\`${requisitesNumber}\` ${requisitesLabel}\n\nTo'lovdan so'ng «📸 Chek yuborish» tugmasini bosing.`
+      `💳 *Оплата доступа*\n\n📦 ${productName(productCode, lang)}\n${countryNames[methodCode]}\nСумма: *${price.amount}*\n\nРеквизиты (нажмите, чтобы скопировать):\n\`${requisitesNumber}\` ${requisitesLabel}\n\nПосле оплаты нажмите «📸 Отправить чек».`,
+      `💳 *Kirish uchun to'lov*\n\n📦 ${productName(productCode, lang)}\n${countryNames[methodCode]}\nSumma: *${price.amount}*\n\nRekvizitlar (nusxalash uchun bosing):\n\`${requisitesNumber}\` ${requisitesLabel}\n\nTo'lovdan so'ng «📸 Chek yuborish» tugmasini bosing.`
     ),
     { parse_mode: 'Markdown', ...mainKeyboard(lang, productCode) }
   );
 }
 
-bot.action(/^pay_(android|iphone|gemini|cs16)_(ru|uz|kg)$/, async (ctx) => {
+bot.action(/^pay_(android|iphone|gemini|cs16|dota2)_(ru|uz|kg)$/, async (ctx) => {
   return selectPayment(ctx, ctx.match[1], ctx.match[2]);
 });
 
@@ -461,12 +509,13 @@ bot.action('send_receipt', async (ctx) => {
   await safeAnswer(ctx);
   const user = getUser(ctx.from.id);
   const lang = user.lang || 'ru';
+  if (!paymentAvailable(user.product)) return replyPaymentUnavailable(ctx, lang);
 
   if (!user.product || !products[user.product] || !user.payment_method) {
     return replyAndRemovePrevious(
       ctx,
       tr(lang, 'Сначала выберите способ оплаты.', "Avval to'lov usulini tanlang."),
-      user.product ? paymentKeyboard(lang, user.product) : productKeyboard()
+      user.product ? paymentKeyboard(lang, user.product) : productKeyboard(lang)
     );
   }
 
@@ -479,8 +528,8 @@ bot.action('send_receipt', async (ctx) => {
     ctx,
     tr(
       lang,
-      `📸 Отправьте фото или PDF чека.\n\nТовар: ${product.name}\nОплата: ${countryNames[user.payment_method]} — ${price.amount}`,
-      `📸 Chek rasmi yoki PDF faylini yuboring.\n\nMahsulot: ${product.name}\nTo'lov: ${countryNames[user.payment_method]} — ${price.amount}`
+      `📸 Отправьте фото или PDF чека.\n\nТовар: ${productName(user.product, lang)}\nОплата: ${countryNames[user.payment_method]} — ${price.amount}`,
+      `📸 Chek rasmi yoki PDF faylini yuboring.\n\nMahsulot: ${productName(user.product, lang)}\nTo'lov: ${countryNames[user.payment_method]} — ${price.amount}`
     )
   );
 });
@@ -488,6 +537,7 @@ bot.action('send_receipt', async (ctx) => {
 async function acceptReceipt(ctx) {
   const user = getUser(ctx.from.id);
   const lang = user.lang || 'ru';
+  if (!paymentAvailable(user.product)) return replyPaymentUnavailable(ctx, lang);
 
   if (!user.waiting_receipt || !user.product || !products[user.product] || !user.payment_method) {
     return ctx.reply(
@@ -508,7 +558,7 @@ async function acceptReceipt(ctx) {
     first_name: ctx.from.first_name || '',
     lang,
     product: user.product,
-    product_name: product.name,
+    product_name: productName(user.product, lang),
     payment_method: user.payment_method,
     price: price.amount,
     country: countryNames[user.payment_method],
@@ -527,7 +577,7 @@ async function acceptReceipt(ctx) {
     await ctx.telegram.forwardMessage(ADMIN_ID, ctx.chat.id, ctx.message.message_id);
     await ctx.telegram.sendMessage(
       ADMIN_ID,
-      `🧾 Новый чек\n\n${profileBlock(db.payments[paymentId])}\n📦 ${product.name}\n🌍 ${countryNames[user.payment_method]}\n💳 ${price.amount}\n\nПодтвердить оплату?`,
+      `🧾 Новый чек\n\n${profileBlock(db.payments[paymentId])}\n📦 ${productName(user.product, lang)}\n🌍 ${countryNames[user.payment_method]}\n💳 ${price.amount}\n\nПодтвердить оплату?`,
       { parse_mode: 'HTML', ...Markup.inlineKeyboard([
         [
           Markup.button.callback('✅ Подтвердить', `approve:${paymentId}`),
@@ -620,7 +670,11 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
   }
 
   // Resolve from the paid product, never the user's current menu selection.
-  const channelId = payment.product === 'cs16' ? CHANNEL_CS16_ID : CHANNEL_ID;
+  if (!paymentAvailable(payment.product)) {
+    return ctx.reply('❗ Выдача Dota 2 недоступна. Проверьте канал и цены в настройках.');
+  }
+  const channelId = payment.product === 'dota2' ? CHANNEL_DOTA2_ID
+    : payment.product === 'cs16' ? CHANNEL_CS16_ID : CHANNEL_ID;
 
   const expireDate = Math.floor(Date.now() / 1000) + INVITE_EXPIRE_MINUTES * 60;
 
@@ -685,6 +739,8 @@ bot.action(/^retry:(.+)$/, async (ctx) => {
   if (payment.status !== 'rejected' || !products[payment.product] || !countryNames[payment.payment_method]) {
     return replyAndRemovePrevious(ctx, tr(lang, 'Этот чек нельзя отправить повторно.', "Bu chekni qayta yuborib bo'lmaydi."));
   }
+
+  if (!paymentAvailable(payment.product)) return replyPaymentUnavailable(ctx, lang);
 
   setUser(ctx.from.id, {
     product: payment.product,
@@ -758,13 +814,13 @@ bot.action('status', async (ctx) => {
     .sort((a,b) => b.created_at.localeCompare(a.created_at));
 
   if (!payments.length) {
-    const productName = user.product && products[user.product] ? products[user.product].name : '';
+    const selectedProductName = user.product && products[user.product] ? productName(user.product, lang) : '';
     return replyAndRemovePrevious(
       ctx,
       tr(
         lang,
-        productName ? `У вас пока нет отправленных чеков для ${productName}.` : 'У вас пока нет отправленных чеков.',
-        `${productName || 'Bu mahsulot'} uchun hali chek yubormagansiz.`
+        selectedProductName ? `У вас пока нет отправленных чеков для ${selectedProductName}.` : 'У вас пока нет отправленных чеков.',
+        `${selectedProductName || 'Bu mahsulot'} uchun hali chek yubormagansiz.`
       ),
       mainKeyboard(lang, user.product)
     );

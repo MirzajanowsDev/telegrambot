@@ -5,17 +5,20 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Markup } = require('telegraf');
 
-function setup(product, configured = true) {
+function setup(product, configured = true, env = {}) {
   let db = { users: { 2: { product: 'android' } }, payments: {
     receipt: { product, user_id: 2, status: 'pending' }
   } };
   const actions = [];
   const hears = [];
+  const events = [];
   let startHandler;
   class FakeBot {
     action(pattern, handler) { actions.push({ pattern, handler }); }
     hears(trigger, handler) { hears.push({ trigger, handler }); }
-    start(handler) { startHandler = handler; } on() {} catch() {}
+    start(handler) { startHandler = handler; }
+    on(event, handler) { events.push({ event, handler }); }
+    catch() {}
     launch() { return Promise.resolve(); }
   }
   const context = vm.createContext({
@@ -37,7 +40,8 @@ function setup(product, configured = true) {
       PAYMENT_UZ_ANDROID: '1111 2222 3333 4444 Owner',
       PAYMENT_UZ_GEMINI: '5555 6666 7777 8888 Owner',
       ...(configured ? { CHANNEL_CS16_ID: '-100222', PRICE_CS16_RU: '100 ₽',
-        PRICE_CS16_UZ: '10000 сум', PRICE_CS16_KG: '100 сом' } : {})
+        PRICE_CS16_UZ: '10000 сум', PRICE_CS16_KG: '100 сом' } : {}),
+      ...env
     }, once() {} }
   });
   vm.runInContext(fs.readFileSync(path.resolve('src/index.js'), 'utf8'), context);
@@ -49,6 +53,7 @@ function setup(product, configured = true) {
   const replyExtras = [];
   const ctx = {
     from: { id: 1 }, match: ['', 'receipt'],
+    chat: { id: 1 },
     callbackQuery: { message: { message_id: 99 } },
     message: { message_id: 100 },
     answerCbQuery: async () => {},
@@ -60,6 +65,7 @@ function setup(product, configured = true) {
     deleteMessage: async messageId => deletedMessages.push(messageId),
     editMessageText: async (text, extra) => editedMessages.push({ text, extra }),
     telegram: {
+      forwardMessage: async () => {},
       createChatInviteLink: async (channel, options) => {
         channels.push(channel);
         assert.equal(options.member_limit, 1);
@@ -76,6 +82,14 @@ function setup(product, configured = true) {
     retry: () => actions.find(a => String(a.pattern).includes('retry:')).handler(ctx),
     status: () => actions.find(a => a.pattern === 'status').handler(ctx),
     hear: text => hears.find(item => item.trigger === text).handler(ctx),
+    action: data => {
+      const action = actions.find(item => typeof item.pattern === 'string'
+        ? item.pattern === data : item.pattern.test(data));
+      ctx.match = typeof action.pattern === 'string' ? null : data.match(action.pattern);
+      return action.handler(ctx);
+    },
+    photo: () => events.find(item => item.event === 'photo').handler(ctx),
+    document: () => events.find(item => item.event === 'document').handler(ctx),
     selectScopedPayment: (productCode, methodCode) => {
       ctx.match = ['', productCode, methodCode];
       return actions.find(a => String(a.pattern).startsWith('/^pay_(android')).handler(ctx);
@@ -288,4 +302,120 @@ test('a rejected payment can restore the exact receipt flow', async () => {
   assert.equal(app.db().users['2'].payment_method, 'uz');
   assert.equal(app.db().users['2'].waiting_receipt, true);
   assert.match(app.replies[0], /Gemini Pro/);
+});
+
+const dota2Env = { CHANNEL_DOTA2_ID: '-100333' };
+
+for (const lang of ['ru', 'uz']) {
+  test(`Dota 2 catalog and standalone Unity description are localized in ${lang}`, async () => {
+    const app = setup('dota2', true, dota2Env);
+    app.db().users['1'] = { lang };
+    await app.action('product_dota2');
+    assert.equal(app.db().users['1'].product, 'dota2');
+    const title = app.editedMessages[0].text;
+    assert.match(title, /Unity/);
+    assert.match(title, /APK/);
+    assert.match(title, lang === 'ru' ? /без эмулятора/ : /emulyatorsiz/);
+    assert.doesNotMatch(title, /Steam Link|https?:\/\/|официальный порт/);
+    const menu = JSON.stringify(vm.runInContext(`productKeyboard('${lang}')`, app.context));
+    assert.match(menu, /product_dota2/);
+    assert.match(menu, lang === 'ru' ? /Dota 2 на Android/ : /Android uchun Dota 2/);
+  });
+
+  for (const [method, amount] of [['ru', '1000 ₽'], ['uz', '80 000 сум'], ['kg', '600 сом']]) {
+    test(`Dota 2 ${lang}/${method} receipt, status and approval retain the paid product`, async () => {
+      const app = setup('dota2', true, dota2Env);
+      app.db().users['1'] = { lang, product: 'dota2' };
+      await app.action('choose_payment');
+      assert.match(JSON.stringify(app.replyExtras.at(-1)), new RegExp(`pay_dota2_${method}`));
+      await app.action(`pay_dota2_${method}`);
+      assert.ok(app.replies.at(-1).includes(amount));
+      await app.action('send_receipt');
+      assert.equal(app.db().users['1'].waiting_receipt, true);
+      if (method === 'uz') {
+        app.ctx.message.document = { mime_type: 'application/pdf' };
+        await app.document();
+      } else {
+        await app.photo();
+      }
+      const payment = Object.values(app.db().payments).find(p => p.id);
+      assert.equal(payment.product, 'dota2');
+      assert.equal(payment.price, amount);
+      assert.equal(payment.lang, lang);
+      assert.equal(payment.status, 'pending');
+      assert.equal(app.db().users['1'].waiting_receipt, false);
+      assert.ok(app.sentMessages.some(m => m.text.includes(amount)));
+      await app.status();
+      assert.match(app.replies.at(-1), lang === 'ru' ? /На проверке/ : /Tekshiruvda/);
+      app.db().users['1'].product = 'android';
+      await app.action(`approve:${payment.id}`);
+      assert.deepEqual(app.channels, ['-100333']);
+      assert.equal(app.db().payments[payment.id].status, 'approved');
+      assert.match(app.sentMessages.at(-1).text, lang === 'ru' ? /Оплата подтверждена/ : /To'lov tasdiqlandi/);
+    });
+  }
+}
+
+test('Dota 2 rejection and retry restore its payment selection', async () => {
+  const app = setup('dota2', true, dota2Env);
+  Object.assign(app.db().payments.receipt, { payment_method: 'kg', price: '600 сом', lang: 'uz' });
+  await app.reject();
+  assert.equal(app.db().payments.receipt.status, 'rejected');
+  app.ctx.from.id = 2;
+  await app.retry();
+  assert.equal(app.db().users['2'].product, 'dota2');
+  assert.equal(app.db().users['2'].payment_method, 'kg');
+  assert.equal(app.db().users['2'].waiting_receipt, true);
+});
+
+for (const channel of ['', '-123', 'not-a-channel']) {
+  test(`Dota 2 without a valid dedicated channel (${channel}) cannot accept payment or deliver access`, async () => {
+    const app = setup('dota2', true, { CHANNEL_DOTA2_ID: channel });
+    const keyboard = JSON.stringify(vm.runInContext("mainKeyboard('ru', 'dota2')", app.context));
+    assert.doesNotMatch(keyboard, /choose_payment|send_receipt/);
+    assert.match(keyboard, /status/);
+    assert.match(vm.runInContext("mainTitle('ru', 'dota2')", app.context), /пока недоступна/);
+    app.db().users['1'] = { lang: 'uz', product: 'dota2', payment_method: 'ru', waiting_receipt: true };
+    for (const data of ['choose_payment', 'pay_dota2_ru', 'pay_ru', 'send_receipt']) {
+      await app.action(data);
+      assert.match(app.replies.at(-1), /hozircha mavjud emas/);
+      assert.equal(app.db().users['1'].waiting_receipt, false);
+      assert.equal(app.db().users['1'].payment_method, null);
+    }
+    app.db().users['1'].waiting_receipt = true;
+    await app.photo();
+    assert.equal(Object.keys(app.db().payments).length, 1);
+    await app.action('approve:receipt');
+    assert.equal(app.db().payments.receipt.status, 'pending');
+    assert.deepEqual(app.channels, []);
+    Object.assign(app.db().payments.receipt, { status: 'rejected', payment_method: 'ru' });
+    app.ctx.from.id = 2;
+    await app.action('retry:receipt');
+    assert.equal(app.db().users['2'].waiting_receipt, false);
+  });
+}
+
+test('Dota 2 honors price and UZ requisites overrides without changing other products', async () => {
+  const app = setup('dota2', true, { ...dota2Env, PRICE_DOTA2_UZ: '90 000 сум', PAYMENT_UZ_DOTA2: '9999 8888 7777 6666|Dota Owner' });
+  await app.action('pay_dota2_uz');
+  assert.match(app.replies.at(-1), /90 000 сум/);
+  assert.match(app.replies.at(-1), /9999 8888 7777 6666/);
+  assert.equal(vm.runInContext('products.android.prices.uz.amount', app.context), '50 000 сум');
+});
+
+test('Dota 2 invite failure leaves the receipt pending for retry', async () => {
+  const app = setup('dota2', true, dota2Env);
+  app.ctx.telegram.createChatInviteLink = async () => { throw new Error('missing invite permission'); };
+  await app.approve();
+  assert.equal(app.db().payments.receipt.status, 'pending');
+  assert.match(app.replies.at(-1), /Проверьте права бота/);
+});
+
+test('Dota 2 uses the owner-provided channel and prices by default', async () => {
+  const app = setup('dota2');
+  await app.approve();
+  assert.deepEqual(app.channels, ['-1004334193236']);
+  assert.equal(vm.runInContext('products.dota2.prices.ru.amount', app.context), '1000 ₽');
+  assert.equal(vm.runInContext('products.dota2.prices.uz.amount', app.context), '80 000 сум');
+  assert.equal(vm.runInContext('products.dota2.prices.kg.amount', app.context), '600 сом');
 });
