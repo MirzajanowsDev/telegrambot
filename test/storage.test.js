@@ -45,3 +45,11 @@ test('native Telegram transport never includes token URLs in thrown errors', asy
   const call = createTelegramApi(token, async () => { throw new Error(`fetch https://api.telegram.org/bot${token}/sendMessage`); });
   await assert.rejects(call('sendMessage', {}), error => !error.message.includes(token));
 });
+
+test('bot configuration reads the supplied environment instead of process globals', () => {
+  const { createBot } = require('../src/bot');
+  const env = { BOT_TOKEN: '42:test-token', ADMIN_ID: '1', CHANNEL_ID: '-100111',
+    PAYMENT_RU: 'RU', PAYMENT_KG: 'KG', PAYMENT_UZ_ANDROID: 'UZ games', PAYMENT_UZ_GEMINI: 'UZ Gemini' };
+  assert.doesNotThrow(() => createBot(env, {}));
+  assert.throws(() => createBot({ ...env, PAYMENT_RU: '' }, {}), /PAYMENT_RU/);
+});

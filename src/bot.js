@@ -80,7 +80,7 @@ const missingPaymentConfig = [
   'PAYMENT_KG',
   'PAYMENT_UZ_ANDROID',
   'PAYMENT_UZ_GEMINI'
-].filter(key => !process.env[key]);
+].filter(key => !env[key]);
 if (missingPaymentConfig.length) {
   throw new Error(`Укажите реквизиты в .env: ${missingPaymentConfig.join(', ')}`);
 }
