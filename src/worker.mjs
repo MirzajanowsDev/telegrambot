@@ -71,8 +71,19 @@ export default {
       await bot.handleUpdate(update);
       await store.finishUpdate(update.update_id, claim.token);
       return new Response('OK');
-    } catch {
-      console.error(JSON.stringify({ event: 'telegram_update_failed', update_id: update.update_id }));
+    } catch (error) {
+      const code = error?.response?.error_code;
+      // An old message may belong to someone who blocked the bot, or refer to
+      // a message Telegram can no longer edit. Retrying cannot fix a 4xx and
+      // would block later updates. Rate limits and server/network errors retry.
+      if (claim?.token && code >= 400 && code < 500 && code !== 429) {
+        console.warn(JSON.stringify({ event: 'telegram_update_rejected', update_id: update.update_id, code }));
+        await store.finishUpdate(update.update_id, claim.token);
+        return new Response('OK');
+      }
+      console.error(JSON.stringify({ event: 'telegram_update_failed', update_id: update.update_id,
+        code: code || null, error: error?.name || 'unknown',
+        operation: /^Telegram [A-Za-z]+/.exec(error?.message || '')?.[0] || null }));
       if (claim?.token) await store.releaseUpdate(update.update_id, claim.token);
       return new Response('Retry later', { status: 503 });
     }

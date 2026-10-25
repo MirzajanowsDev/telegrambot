@@ -9,6 +9,7 @@ let updateId = 1;
 let messageId = 1;
 const calls = [];
 let failInvite = false;
+let sendMessageError = 0;
 const secret = 'test-webhook-secret';
 
 before(async () => {
@@ -26,6 +27,11 @@ before(async () => {
       const method = url.pathname.split('/').at(-1);
       const payload = await request.json();
       calls.push({ method, payload });
+      if (method === 'sendMessage' && sendMessageError) {
+        const code = sendMessageError;
+        sendMessageError = 0;
+        return Response.json({ ok: false, error_code: code }, { status: code });
+      }
       if (method === 'createChatInviteLink' && failInvite) {
         failInvite = false;
         return Response.json({ ok: false, error_code: 403 }, { status: 403 });
@@ -180,4 +186,24 @@ test('marking receipt notification cannot overwrite an approved payment', async 
   await store.savePayment(payment);
   await store.markReceiptNotified(id);
   assert.equal((await store.getPayment(id)).status, 'approved');
+});
+
+
+test('permanent Telegram reply errors do not block later updates', async () => {
+  const update = message(808, '/start');
+  sendMessageError = 403;
+  await send(update);
+  assert.equal((await store.claimUpdate(update.update_id)).done, true);
+  await send(message(809, '/start'));
+  assert.ok((await store.getUser(809)).language_prompt_message_id);
+});
+
+test('Telegram server errors and rate limits remain retryable', async () => {
+  for (const code of [500, 429]) {
+    const update = message(810 + code, '/start');
+    sendMessageError = code;
+    await send(update, 503);
+    await send(update);
+    assert.ok((await store.getUser(810 + code)).language_prompt_message_id);
+  }
 });
