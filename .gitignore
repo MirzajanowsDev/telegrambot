@@ -7,3 +7,9 @@ npm-debug.log*
 bot.log
 data.json
 *.tmp
+
+.dev.vars*
+.wrangler/
+worker-configuration.d.ts
+*.private.json
+*.private.sql

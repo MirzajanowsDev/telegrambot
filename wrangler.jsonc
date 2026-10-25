@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "telegrambot",
+  "main": "src/worker.mjs",
+  "account_id": "2b063e4ef8968df7a4acc63b3d8b07cc",
+  "compatibility_date": "2026-10-25",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "triggers": {
+    "crons": [
+      "17 3 * * *"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "telegrambot",
+      "migrations_dir": "migrations",
+      "database_id": "1ce8b63d-ed63-4fbd-9b70-d4712fc92173"
+    }
+  ],
+  "vars": {
+    "CHANNEL_ID": "-1004446235577",
+    "CHANNEL_CS16_ID": "-1004335642053",
+    "CHANNEL_DOTA2_ID": "-1004334193236",
+    "DEFAULT_SUPPORT_USERNAME": "mirzajonows",
+    "PRICE_DOTA2_RU": "1000 ₽",
+    "PRICE_DOTA2_UZ": "80 000 сум",
+    "PRICE_DOTA2_KG": "600 сом",
+    "INVITE_EXPIRE_MINUTES": "60"
+  }
+}
