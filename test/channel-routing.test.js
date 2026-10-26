@@ -44,7 +44,29 @@ function setup(product, configured = true, env = {}) {
       ...env
     }, once() {} }
   });
-  vm.runInContext(fs.readFileSync(path.resolve('src/index.js'), 'utf8'), context);
+  context.module = { exports: {} };
+  context.store = {
+    async getUser(id) { return { ...db.users[String(id)] }; },
+    async setUser(id, patch) { db.users[String(id)] = { ...db.users[String(id)], ...patch }; },
+    async getPayment(id) { return db.payments[id] ? { ...db.payments[id], id } : undefined; },
+    async createPayment(p) { if (db.payments[p.id]) return false; db.payments[p.id] = { ...p }; return true; },
+    async deletePayment(id) { delete db.payments[id]; },
+    async markReceiptNotified(id) { db.payments[id].receipt_notified = true; },
+    async savePayment(p) { const clean = { ...p }; delete clean._claim; db.payments[p.id] = clean; },
+    async claimPayment(id) {
+      const p = db.payments[id];
+      if (!p || !['pending','rejected'].includes(p.status)) return null;
+      const claimed = { ...p, id, _claim: 'test-claim' };
+      p.status = 'processing';
+      return claimed;
+    },
+    async releasePayment(p) { await this.savePayment(p); },
+    async listPayments(userId, product) { return Object.values(db.payments)
+      .filter(p => p.user_id === userId && (!product || p.product === product))
+      .sort((a,b) => b.created_at.localeCompare(a.created_at)); }
+  };
+  vm.runInContext(fs.readFileSync(path.resolve('src/bot.js'), 'utf8') +
+    '\nconst { bot, products, productKeyboard, productTitle, mainTitle, mainKeyboard, paymentKeyboard, replyMenuKeyboard, languageKeyboard, splitRequisites } = createBot(process.env, store);', context);
   const channels = [];
   const replies = [];
   const sentMessages = [];
@@ -322,7 +344,7 @@ for (const lang of ['ru', 'uz']) {
     assert.match(menu, lang === 'ru' ? /Dota 2 на Android/ : /Android uchun Dota 2/);
   });
 
-  for (const [method, amount] of [['ru', '1000 ₽'], ['uz', '80 000 сум'], ['kg', '600 сом']]) {
+  for (const [method, amount] of [['ru', '500 ₽'], ['uz', '60 000 сум'], ['kg', '500 сом']]) {
     test(`Dota 2 ${lang}/${method} receipt, status and approval retain the paid product`, async () => {
       const app = setup('dota2', true, dota2Env);
       app.db().users['1'] = { lang, product: 'dota2' };
@@ -405,7 +427,11 @@ test('Dota 2 honors price and UZ requisites overrides without changing other pro
 
 test('Dota 2 invite failure leaves the receipt pending for retry', async () => {
   const app = setup('dota2', true, dota2Env);
-  app.ctx.telegram.createChatInviteLink = async () => { throw new Error('missing invite permission'); };
+  app.ctx.telegram.createChatInviteLink = async () => {
+    const error = new Error('missing invite permission');
+    error.response = { error_code: 403 };
+    throw error;
+  };
   await app.approve();
   assert.equal(app.db().payments.receipt.status, 'pending');
   assert.match(app.replies.at(-1), /Проверьте права бота/);
@@ -415,7 +441,17 @@ test('Dota 2 uses the owner-provided channel and prices by default', async () =>
   const app = setup('dota2');
   await app.approve();
   assert.deepEqual(app.channels, ['-1004334193236']);
-  assert.equal(vm.runInContext('products.dota2.prices.ru.amount', app.context), '1000 ₽');
-  assert.equal(vm.runInContext('products.dota2.prices.uz.amount', app.context), '80 000 сум');
-  assert.equal(vm.runInContext('products.dota2.prices.kg.amount', app.context), '600 сом');
+  assert.equal(vm.runInContext('products.dota2.prices.ru.amount', app.context), '500 ₽');
+  assert.equal(vm.runInContext('products.dota2.prices.uz.amount', app.context), '60 000 сум');
+  assert.equal(vm.runInContext('products.dota2.prices.kg.amount', app.context), '500 сом');
+});
+
+test('an uncertain invite result stays claimed instead of creating another invitation', async () => {
+  const app = setup('dota2', true, dota2Env);
+  app.ctx.telegram.createChatInviteLink = async () => { throw new Error('timeout'); };
+  await app.approve();
+  assert.equal(app.db().payments.receipt.status, 'processing');
+  assert.match(app.replies.at(-1), /Результат создания приглашения неизвестен/);
+  await app.approve();
+  assert.match(app.replies.at(-1), /уже обрабатывается/);
 });
