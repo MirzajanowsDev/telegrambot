@@ -29,9 +29,9 @@ const products = {
     name: '⚔️ Dota 2 на Android',
     nameUz: '⚔️ Android uchun Dota 2',
     prices: {
-      ru: { amount: env.PRICE_DOTA2_RU || '1000 ₽', requisites: PAYMENT_RU },
-      uz: { amount: env.PRICE_DOTA2_UZ || '80 000 сум', requisites: env.PAYMENT_UZ_DOTA2 || PAYMENT_UZ_ANDROID },
-      kg: { amount: env.PRICE_DOTA2_KG || '600 сом', requisites: PAYMENT_KG }
+      ru: { amount: env.PRICE_DOTA2_RU || '500 ₽', requisites: PAYMENT_RU },
+      uz: { amount: env.PRICE_DOTA2_UZ || '60 000 сум', requisites: env.PAYMENT_UZ_DOTA2 || PAYMENT_UZ_ANDROID },
+      kg: { amount: env.PRICE_DOTA2_KG || '500 сом', requisites: PAYMENT_KG }
     }
   },
   cs16: {

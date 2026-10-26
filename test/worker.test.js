@@ -107,7 +107,7 @@ for (const lang of ['ru','uz']) {
       assert.equal(payment.status, 'pending');
       assert.equal(payment.lang, lang);
       assert.equal(payment.product, 'dota2');
-      assert.equal(payment.price, { ru: '1000 ₽', uz: '80 000 сум', kg: '600 сом' }[method]);
+      assert.equal(payment.price, { ru: '500 ₽', uz: '60 000 сум', kg: '500 сом' }[method]);
       await send(callback(user, 'status'));
       const beforeDuplicate = calls.length;
       await send(receipt);

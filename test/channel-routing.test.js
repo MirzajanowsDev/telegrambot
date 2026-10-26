@@ -344,7 +344,7 @@ for (const lang of ['ru', 'uz']) {
     assert.match(menu, lang === 'ru' ? /Dota 2 на Android/ : /Android uchun Dota 2/);
   });
 
-  for (const [method, amount] of [['ru', '1000 ₽'], ['uz', '80 000 сум'], ['kg', '600 сом']]) {
+  for (const [method, amount] of [['ru', '500 ₽'], ['uz', '60 000 сум'], ['kg', '500 сом']]) {
     test(`Dota 2 ${lang}/${method} receipt, status and approval retain the paid product`, async () => {
       const app = setup('dota2', true, dota2Env);
       app.db().users['1'] = { lang, product: 'dota2' };
@@ -441,9 +441,9 @@ test('Dota 2 uses the owner-provided channel and prices by default', async () =>
   const app = setup('dota2');
   await app.approve();
   assert.deepEqual(app.channels, ['-1004334193236']);
-  assert.equal(vm.runInContext('products.dota2.prices.ru.amount', app.context), '1000 ₽');
-  assert.equal(vm.runInContext('products.dota2.prices.uz.amount', app.context), '80 000 сум');
-  assert.equal(vm.runInContext('products.dota2.prices.kg.amount', app.context), '600 сом');
+  assert.equal(vm.runInContext('products.dota2.prices.ru.amount', app.context), '500 ₽');
+  assert.equal(vm.runInContext('products.dota2.prices.uz.amount', app.context), '60 000 сум');
+  assert.equal(vm.runInContext('products.dota2.prices.kg.amount', app.context), '500 сом');
 });
 
 test('an uncertain invite result stays claimed instead of creating another invitation', async () => {
